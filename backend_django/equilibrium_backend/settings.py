@@ -17,6 +17,8 @@ env = environ.Env(
     DATABASE_URL=(str, ''),
     TELEGRAM_BOT_TOKEN=(str, ''),
     TELEGRAM_WEBAPP_URL=(str, ''),
+    TELEGRAM_WEBHOOK_URL=(str, ''),
+    RAILWAY_PUBLIC_DOMAIN=(str, ''),
     MAX_PARTNERS_PER_LEVEL=(int, 3),
     DEFAULT_GREEN_BONUS_PERCENT=(int, 50),
     DEFAULT_YELLOW_BONUS_PERCENT=(int, 50),
@@ -142,6 +144,7 @@ MLM_SETTINGS = {
 # Telegram Bot Settings
 TELEGRAM_BOT_TOKEN = env('TELEGRAM_BOT_TOKEN', default='')
 TELEGRAM_WEBAPP_URL = env('TELEGRAM_WEBAPP_URL', default='')
+TELEGRAM_WEBHOOK_URL = env('TELEGRAM_WEBHOOK_URL', default='')
 
 # Railway Settings
 RAILWAY_PUBLIC_DOMAIN = env('RAILWAY_PUBLIC_DOMAIN', default='')

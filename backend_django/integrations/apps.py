@@ -41,21 +41,37 @@ class IntegrationsConfig(AppConfig):
             from django.conf import settings
             if settings.TELEGRAM_BOT_TOKEN:
                 try:
-                    from .telegram import init_telegram_bot, start_telegram_bot_async
+                    from .telegram import init_telegram_bot, start_telegram_bot_webhook
                     
                     # Инициализируем бота
                     application = init_telegram_bot()
                     
                     if application:
-                        # Запускаем бота в отдельном потоке
-                        bot_thread = threading.Thread(
-                            target=start_telegram_bot_async,
-                            args=(application,),
-                            daemon=True,
-                            name="TelegramBotThread"
-                        )
-                        bot_thread.start()
-                        _bot_started = True
-                        logger.info("✅ Telegram бот запущен в отдельном потоке")
+                        # Определяем URL для webhook
+                        webhook_url = None
+                        
+                        # Пробуем получить из переменных окружения
+                        if hasattr(settings, 'TELEGRAM_WEBHOOK_URL') and settings.TELEGRAM_WEBHOOK_URL:
+                            webhook_url = settings.TELEGRAM_WEBHOOK_URL
+                        elif hasattr(settings, 'RAILWAY_PUBLIC_DOMAIN') and settings.RAILWAY_PUBLIC_DOMAIN:
+                            # Автоматически формируем URL из Railway домена
+                            domain = settings.RAILWAY_PUBLIC_DOMAIN
+                            if not domain.startswith('http'):
+                                domain = f"https://{domain}"
+                            webhook_url = f"{domain}/telegram/webhook/"
+                        else:
+                            logger.warning(
+                                "⚠️  TELEGRAM_WEBHOOK_URL или RAILWAY_PUBLIC_DOMAIN не установлены.\n"
+                                "   Webhook не будет настроен автоматически.\n"
+                                "   Установите TELEGRAM_WEBHOOK_URL в переменных окружения Railway."
+                            )
+                        
+                        if webhook_url:
+                            # Настраиваем webhook (синхронно, не в потоке)
+                            start_telegram_bot_webhook(application, webhook_url)
+                            _bot_started = True
+                            logger.info("✅ Telegram бот настроен через Webhook")
+                        else:
+                            logger.warning("⚠️  Webhook URL не определен, бот не будет работать")
                 except Exception as e:
                     logger.error(f"❌ Ошибка инициализации Telegram бота: {e}", exc_info=True)

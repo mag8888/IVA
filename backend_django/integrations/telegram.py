@@ -2,7 +2,11 @@
 Telegram Bot integration для Equilibrium MLM.
 """
 import logging
+import json
 from django.conf import settings
+from django.http import HttpResponse, JsonResponse
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_http_methods
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, ContextTypes
 from django.db import models
@@ -160,46 +164,112 @@ def init_telegram_bot():
     return application
 
 
-def start_telegram_bot_async(application):
-    """Запуск Telegram бота в асинхронном режиме (для использования в потоке)."""
-    import time
+def setup_webhook(application, webhook_url):
+    """Установка webhook для Telegram бота."""
+    try:
+        # Удаляем предыдущий webhook, если был
+        application.bot.delete_webhook(drop_pending_updates=True)
+        logger.info("🗑️  Удален предыдущий webhook")
+        
+        # Устанавливаем новый webhook
+        result = application.bot.set_webhook(
+            url=webhook_url,
+            allowed_updates=Update.ALL_TYPES,
+            drop_pending_updates=True
+        )
+        
+        if result:
+            logger.info(f"✅ Webhook установлен: {webhook_url}")
+            
+            # Проверяем информацию о webhook
+            webhook_info = application.bot.get_webhook_info()
+            logger.info(f"📡 Webhook info: {webhook_info.url}, pending updates: {webhook_info.pending_update_count}")
+            return True
+        else:
+            logger.error("❌ Не удалось установить webhook")
+            return False
+    except Exception as e:
+        logger.error(f"❌ Ошибка при установке webhook: {e}", exc_info=True)
+        return False
+
+
+def remove_webhook(application):
+    """Удаление webhook для Telegram бота."""
+    try:
+        if application and application.bot:
+            application.bot.delete_webhook()
+            logger.info("✅ Webhook удален")
+            return True
+    except Exception as e:
+        logger.error(f"❌ Ошибка при удалении webhook: {e}", exc_info=True)
+    return False
+
+
+def start_telegram_bot_webhook(application, webhook_url):
+    """Настройка webhook для Telegram бота (вместо polling)."""
+    try:
+        logger.info(f"🚀 Настройка Telegram бота через Webhook...")
+        logger.info(f"📡 Webhook URL: {webhook_url}")
+        
+        # Устанавливаем webhook
+        if setup_webhook(application, webhook_url):
+            logger.info("✅ Telegram бот настроен через Webhook")
+            return True
+        else:
+            logger.error("❌ Не удалось настроить webhook")
+            return False
+    except Exception as e:
+        logger.error(f"❌ Ошибка при настройке webhook: {e}", exc_info=True)
+        return False
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def telegram_webhook(request):
+    """Django view для обработки webhook запросов от Telegram."""
+    import asyncio
+    import threading
+    global bot_application
+    
+    if bot_application is None:
+        logger.error("❌ Telegram бот не инициализирован")
+        return JsonResponse({"ok": False, "error": "Bot not initialized"}, status=500)
     
     try:
-        logger.info("🚀 Запуск Telegram бота (polling)...")
+        # Получаем JSON данные из запроса
+        body = request.body.decode('utf-8')
+        data = json.loads(body)
         
-        # Небольшая задержка перед запуском, чтобы избежать конфликтов
-        time.sleep(2)
+        # Создаем Update объект
+        update = Update.de_json(data, bot_application.bot)
         
-        # Останавливаем предыдущий polling, если был
-        try:
-            if hasattr(application, 'running') and application.running:
-                logger.info("⚠️  Останавливаем предыдущий polling...")
-                application.stop()
-                time.sleep(1)
-        except Exception as stop_error:
-            logger.debug(f"Ошибка при остановке предыдущего polling: {stop_error}")
+        # Обрабатываем обновление в отдельном потоке с новым event loop
+        def process_update_async():
+            """Обработка обновления в отдельном потоке."""
+            try:
+                # Создаем новый event loop для этого потока
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                
+                # Запускаем обработку обновления
+                loop.run_until_complete(bot_application.process_update(update))
+                loop.close()
+            except Exception as e:
+                logger.error(f"❌ Ошибка обработки обновления в потоке: {e}", exc_info=True)
         
-        # Запускаем polling с обработкой ошибок
-        logger.info("📡 Начинаем polling обновлений...")
-        application.run_polling(
-            allowed_updates=Update.ALL_TYPES,
-            drop_pending_updates=True,
-            close_loop=False,  # Не закрываем event loop при ошибке
-            stop_signals=None  # Не обрабатываем сигналы остановки в потоке
-        )
+        # Запускаем обработку в отдельном потоке (не блокируем ответ)
+        thread = threading.Thread(target=process_update_async, daemon=True)
+        thread.start()
+        
+        # Сразу возвращаем ответ Telegram (не ждем обработки)
+        return JsonResponse({"ok": True})
+        
+    except json.JSONDecodeError as e:
+        logger.error(f"❌ Ошибка парсинга JSON: {e}")
+        return JsonResponse({"ok": False, "error": "Invalid JSON"}, status=400)
     except Exception as e:
-        error_msg = str(e)
-        if "409" in error_msg or "Conflict" in error_msg:
-            logger.error(
-                "❌ Конфликт 409: Другой экземпляр бота уже запущен.\n"
-                "   Возможные причины:\n"
-                "   1. Другой процесс бота все еще работает\n"
-                "   2. Несколько реплик сервиса на Railway\n"
-                "   3. Старый процесс не завершился\n"
-                "   Решение: Перезапустите Backend на Railway или используйте Webhook вместо Polling"
-            )
-        else:
-            logger.error(f"❌ Ошибка при запуске Telegram бота: {e}", exc_info=True)
+        logger.error(f"❌ Ошибка обработки webhook: {e}", exc_info=True)
+        return JsonResponse({"ok": False, "error": str(e)}, status=500)
 
 
 def start_telegram_bot():
