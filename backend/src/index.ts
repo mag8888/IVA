@@ -36,11 +36,14 @@ async function startServer() {
     await initDatabase();
     console.log('✅ Database connected and initialized');
 
-    if (process.env.TELEGRAM_BOT_TOKEN) {
-      initTelegramBot();
-      console.log('✅ Telegram bot initialized');
+    // Отключаем Telegram бота в старом Node.js backend
+    // Бот теперь работает через Django backend (backend_django)
+    if (process.env.TELEGRAM_BOT_TOKEN && !process.env.DISABLE_TELEGRAM_BOT) {
+      console.log('⚠️  Telegram bot disabled in Node.js backend');
+      console.log('⚠️  Use Django backend (backend_django) for Telegram bot');
+      // initTelegramBot(); // Отключено - используем Django бота
     } else {
-      console.log('⚠️  Telegram bot token not provided - bot will not work');
+      console.log('⚠️  Telegram bot not initialized (using Django backend)');
     }
 
     app.listen(PORT, () => {
