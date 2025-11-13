@@ -19,6 +19,7 @@ env = environ.Env(
     TELEGRAM_WEBAPP_URL=(str, ''),
     TELEGRAM_WEBHOOK_URL=(str, ''),
     RAILWAY_PUBLIC_DOMAIN=(str, ''),
+    CORS_ALLOW_ALL_ORIGINS=(bool, False),
     MAX_PARTNERS_PER_LEVEL=(int, 3),
     DEFAULT_GREEN_BONUS_PERCENT=(int, 50),
     DEFAULT_YELLOW_BONUS_PERCENT=(int, 50),
@@ -45,6 +46,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'corsheaders',  # CORS для работы с фронтендом
     'rest_framework',
     'rest_framework.authtoken',
     'core',
@@ -56,6 +58,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'corsheaders.middleware.CorsMiddleware',  # CORS middleware (должен быть первым после SecurityMiddleware)
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -148,6 +151,41 @@ TELEGRAM_WEBHOOK_URL = env('TELEGRAM_WEBHOOK_URL', default='')
 
 # Railway Settings
 RAILWAY_PUBLIC_DOMAIN = env('RAILWAY_PUBLIC_DOMAIN', default='')
+
+# CORS Settings (для работы с фронтендом)
+CORS_ALLOWED_ORIGINS = env.list(
+    'CORS_ALLOWED_ORIGINS',
+    default=[
+        'https://iva.up.railway.app',
+        'http://localhost:3000',  # Для локальной разработки
+        'http://localhost:5173',  # Vite dev server
+    ]
+)
+
+# Разрешаем все домены в development (для Railway)
+CORS_ALLOW_ALL_ORIGINS = env.bool('CORS_ALLOW_ALL_ORIGINS', default=False)
+
+# Дополнительные CORS настройки
+CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOW_METHODS = [
+    'DELETE',
+    'GET',
+    'OPTIONS',
+    'PATCH',
+    'POST',
+    'PUT',
+]
+CORS_ALLOW_HEADERS = [
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'x-requested-with',
+]
 
 # Database connection settings (оптимизация)
 if 'postgresql' in DATABASES['default'].get('ENGINE', ''):
