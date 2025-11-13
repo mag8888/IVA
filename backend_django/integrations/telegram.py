@@ -135,6 +135,11 @@ def init_telegram_bot():
     """Инициализация Telegram бота."""
     global bot_application
     
+    # Проверяем, не запущен ли уже бот
+    if bot_application is not None:
+        logger.warning("⚠️  Telegram бот уже инициализирован, возвращаем существующий экземпляр")
+        return bot_application
+    
     token = settings.TELEGRAM_BOT_TOKEN
     if not token:
         logger.warning("TELEGRAM_BOT_TOKEN не установлен. Telegram бот не будет запущен.")
@@ -151,7 +156,7 @@ def init_telegram_bot():
     # Сохраняем глобально
     bot_application = application
     
-    logger.info("Telegram бот инициализирован")
+    logger.info("✅ Telegram бот инициализирован")
     return application
 
 
@@ -159,12 +164,26 @@ def start_telegram_bot_async(application):
     """Запуск Telegram бота в асинхронном режиме (для использования в потоке)."""
     try:
         logger.info("🚀 Запуск Telegram бота (polling)...")
+        # Останавливаем предыдущий polling, если был
+        try:
+            if application.running:
+                logger.info("⚠️  Останавливаем предыдущий polling...")
+                application.stop()
+        except:
+            pass
+        
+        # Запускаем polling с обработкой ошибок
         application.run_polling(
             allowed_updates=Update.ALL_TYPES,
-            drop_pending_updates=True
+            drop_pending_updates=True,
+            close_loop=False  # Не закрываем event loop при ошибке
         )
     except Exception as e:
-        logger.error(f"❌ Ошибка при запуске Telegram бота: {e}", exc_info=True)
+        error_msg = str(e)
+        if "409" in error_msg or "Conflict" in error_msg:
+            logger.error(f"❌ Конфликт: Другой экземпляр бота уже запущен. Остановите другие процессы бота.")
+        else:
+            logger.error(f"❌ Ошибка при запуске Telegram бота: {e}", exc_info=True)
 
 
 def start_telegram_bot():

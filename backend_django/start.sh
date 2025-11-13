@@ -34,6 +34,8 @@ timeout 300 python manage.py migrate --noinput || echo "⚠️  Migrations timeo
 
 # Запуск Gunicorn
 echo "🌐 Starting Gunicorn..."
+# Устанавливаем переменную для главного процесса
+export RUN_MAIN=true
 exec gunicorn \
     --bind 0.0.0.0:${PORT:-8000} \
     --workers 1 \
