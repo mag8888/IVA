@@ -1,4 +1,4 @@
-import TelegramBot from 'node-telegram-bot-api';
+import TelegramBot, { Message } from 'node-telegram-bot-api';
 import dotenv from 'dotenv';
 import { query } from './db';
 
@@ -15,7 +15,7 @@ export function initTelegramBot() {
   bot = new TelegramBot(token, { polling: true });
 
   // Handle /start command
-  bot.onText(/\/start/, async (msg) => {
+  bot.onText(/\/start/, async (msg: Message) => {
     const chatId = msg.chat.id;
     const userId = msg.from?.id;
     const username = msg.from?.username;
@@ -51,7 +51,7 @@ export function initTelegramBot() {
   });
 
   // Handle all messages
-  bot.on('message', async (msg) => {
+  bot.on('message', async (msg: Message) => {
     if (msg.text?.startsWith('/')) {
       return; // Skip commands (already handled)
     }
