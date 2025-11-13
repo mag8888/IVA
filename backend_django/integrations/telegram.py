@@ -162,26 +162,42 @@ def init_telegram_bot():
 
 def start_telegram_bot_async(application):
     """Запуск Telegram бота в асинхронном режиме (для использования в потоке)."""
+    import time
+    
     try:
         logger.info("🚀 Запуск Telegram бота (polling)...")
+        
+        # Небольшая задержка перед запуском, чтобы избежать конфликтов
+        time.sleep(2)
+        
         # Останавливаем предыдущий polling, если был
         try:
-            if application.running:
+            if hasattr(application, 'running') and application.running:
                 logger.info("⚠️  Останавливаем предыдущий polling...")
                 application.stop()
-        except:
-            pass
+                time.sleep(1)
+        except Exception as stop_error:
+            logger.debug(f"Ошибка при остановке предыдущего polling: {stop_error}")
         
         # Запускаем polling с обработкой ошибок
+        logger.info("📡 Начинаем polling обновлений...")
         application.run_polling(
             allowed_updates=Update.ALL_TYPES,
             drop_pending_updates=True,
-            close_loop=False  # Не закрываем event loop при ошибке
+            close_loop=False,  # Не закрываем event loop при ошибке
+            stop_signals=None  # Не обрабатываем сигналы остановки в потоке
         )
     except Exception as e:
         error_msg = str(e)
         if "409" in error_msg or "Conflict" in error_msg:
-            logger.error(f"❌ Конфликт: Другой экземпляр бота уже запущен. Остановите другие процессы бота.")
+            logger.error(
+                "❌ Конфликт 409: Другой экземпляр бота уже запущен.\n"
+                "   Возможные причины:\n"
+                "   1. Другой процесс бота все еще работает\n"
+                "   2. Несколько реплик сервиса на Railway\n"
+                "   3. Старый процесс не завершился\n"
+                "   Решение: Перезапустите Backend на Railway или используйте Webhook вместо Polling"
+            )
         else:
             logger.error(f"❌ Ошибка при запуске Telegram бота: {e}", exc_info=True)
 

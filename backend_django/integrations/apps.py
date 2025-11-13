@@ -28,16 +28,9 @@ class IntegrationsConfig(AppConfig):
             logger.info("⚠️  Telegram бот отключен через DISABLE_TELEGRAM_BOT")
             return
         
-        # Запускаем бота только в главном процессе Gunicorn (не в воркерах)
-        # Gunicorn устанавливает RUN_MAIN='true' только в главном процессе
-        if hasattr(sys, '_getframe'):
-            # Проверяем, не воркер ли это
-            frame = sys._getframe(1)
-            if frame and 'gunicorn' in str(frame.f_globals.get('__file__', '')):
-                # Это может быть воркер, проверяем RUN_MAIN
-                if os.environ.get('RUN_MAIN') != 'true':
-                    logger.info("⚠️  Пропускаем запуск бота в воркере Gunicorn")
-                    return
+        # Запускаем бота только в главном процессе (не в воркерах)
+        # При использовании --preload Gunicorn загружает приложение до форка воркеров
+        # Но ready() может вызываться несколько раз, поэтому используем флаг
         
         # Запускаем бота только один раз (даже если ready() вызывается несколько раз)
         with _bot_lock:
