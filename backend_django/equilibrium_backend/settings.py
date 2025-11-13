@@ -58,7 +58,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
-    'corsheaders.middleware.CorsMiddleware',  # CORS middleware (должен быть первым после SecurityMiddleware)
+    'corsheaders.middleware.CorsMiddleware',  # CORS middleware (должен быть как можно раньше)
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
