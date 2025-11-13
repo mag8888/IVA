@@ -22,17 +22,20 @@ bot_application = None
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Обработчик команды /start."""
+    logger.info(f"📥 Получена команда /start от пользователя {update.effective_user.id}")
     user = update.effective_user
     
     # Проверяем, зарегистрирован ли пользователь
     try:
         db_user = User.objects.get(username=str(user.id))
+        logger.info(f"✅ Пользователь {user.id} найден в БД: {db_user.username}")
         await update.message.reply_text(
             f"Привет, {db_user.username}! 👋\n\n"
             f"Твой реферальный код: {db_user.referral_code}\n\n"
             f"Используй /app для просмотра структуры."
         )
     except User.DoesNotExist:
+        logger.info(f"ℹ️  Пользователь {user.id} не найден в БД, отправляем приветствие")
         await update.message.reply_text(
             f"Привет, {user.first_name}! 👋\n\n"
             f"Добро пожаловать в Equilibrium MLM System!\n\n"
@@ -42,11 +45,15 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
 async def app_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Обработчик команды /app - открытие мини-приложения с MLM структурой."""
+    logger.info(f"📥 Получена команда /app от пользователя {update.effective_user.id}")
     webapp_url = settings.TELEGRAM_WEBAPP_URL or settings.RAILWAY_PUBLIC_DOMAIN
+    
+    logger.info(f"🔗 Webapp URL: {webapp_url}")
     
     if not webapp_url:
         # Если URL не настроен, используем текущий домен из запроса
         # В production это должно быть настроено через переменные окружения
+        logger.warning("⚠️  TELEGRAM_WEBAPP_URL и RAILWAY_PUBLIC_DOMAIN не установлены")
         await update.message.reply_text(
             "Мини-приложение не настроено. Обратитесь к администратору.\n\n"
             "Для настройки добавьте переменную TELEGRAM_WEBAPP_URL в Railway."
@@ -59,6 +66,7 @@ async def app_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     
     # URL мини-приложения
     webapp_path = f"{webapp_url}/telegram-app/"
+    logger.info(f"🌐 Webapp path: {webapp_path}")
     
     # Создаем кнопку для открытия веб-приложения
     keyboard = [
@@ -69,6 +77,7 @@ async def app_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
+    logger.info(f"✅ Отправляю кнопку с Web App для пользователя {update.effective_user.id}")
     await update.message.reply_text(
         "👋 Добро пожаловать в Equilibrium MLM!\n\n"
         "Нажмите кнопку ниже, чтобы открыть вашу MLM структуру:",
@@ -243,6 +252,12 @@ def telegram_webhook(request):
         # Создаем Update объект
         update = Update.de_json(data, bot_application.bot)
         
+        # Логируем входящее обновление
+        if update.message and update.message.text:
+            logger.info(f"📨 Получено сообщение: {update.message.text} от {update.effective_user.id if update.effective_user else 'unknown'}")
+        elif update.message:
+            logger.info(f"📨 Получено обновление от {update.effective_user.id if update.effective_user else 'unknown'}")
+        
         # Обрабатываем обновление в отдельном потоке с новым event loop
         def process_update_async():
             """Обработка обновления в отдельном потоке."""
@@ -251,8 +266,10 @@ def telegram_webhook(request):
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
                 
+                logger.info(f"🔄 Начинаю обработку обновления в потоке")
                 # Запускаем обработку обновления
                 loop.run_until_complete(bot_application.process_update(update))
+                logger.info(f"✅ Обновление успешно обработано")
                 loop.close()
             except Exception as e:
                 logger.error(f"❌ Ошибка обработки обновления в потоке: {e}", exc_info=True)
