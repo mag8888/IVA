@@ -48,7 +48,16 @@ async function startServer() {
 
     app.listen(PORT, () => {
       console.log(`🚀 Backend server running on port ${PORT}`);
-      console.log(`🌐 Health check: http://localhost:${PORT}/health`);
+      
+      // Используем Railway URL вместо localhost
+      const railwayDomain = process.env.RAILWAY_PUBLIC_DOMAIN;
+      if (railwayDomain) {
+        const protocol = railwayDomain.startsWith('http') ? '' : 'https://';
+        console.log(`🌐 Health check: ${protocol}${railwayDomain}/health`);
+      } else {
+        // Если Railway домен не установлен, просто не показываем localhost
+        console.log(`🌐 Health check endpoint: /health`);
+      }
     });
   } catch (error: any) {
     console.error('❌ Failed to start server:', error);
