@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MLM Структура - Equilibrium</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        #structure-container {
+            min-height: 600px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            padding: 20px;
+            background: #f9f9f9;
+        }
+        .node {
+            display: inline-block;
+            padding: 10px 15px;
+            margin: 5px;
+            background: white;
+            border: 2px solid #007bff;
+            border-radius: 5px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .node:hover {
+            transform: scale(1.05);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+        .node.root {
+            background: #007bff;
+            color: white;
+        }
+        .node.level-0 { border-color: #007bff; }
+        .node.level-1 { border-color: #28a745; }
+        .node.level-2 { border-color: #ffc107; }
+        .node.level-3 { border-color: #dc3545; }
+        .loading {
+            text-align: center;
+            padding: 50px;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="/">
+                <i class="fas fa-chart-line"></i> Equilibrium MLM
+            </a>
+            <div class="navbar-nav ms-auto">
+                <a class="nav-link" href="/">Дашборд</a>
+                <a class="nav-link active" href="/structure/">Структура</a>
+                <a class="nav-link" href="/queue/">Очередь</a>
+                <a class="nav-link" href="/admin/">Django Admin</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid mt-4">
+        <h1 class="mb-4">MLM Структура</h1>
+        
+        <div class="mb-3">
+            <button class="btn btn-primary" onclick="loadStructure()">
+                <i class="fas fa-sync"></i> Обновить
+            </button>
+        </div>
+
+        <div id="structure-container">
+            <div class="loading">
+                <i class="fas fa-spinner fa-spin fa-3x"></i>
+                <p>Загрузка структуры...</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Загрузка структуры из API (данные из БД)
+        async function loadStructure() {
+            const container = document.getElementById('structure-container');
+            container.innerHTML = '<div class="loading"><i class="fas fa-spinner fa-spin fa-3x"></i><p>Загрузка структуры...</p></div>';
+            
+            try {
+                const response = await fetch('/api/structure/tree/');
+                if (!response.ok) {
+                    throw new Error('Ошибка загрузки структуры');
+                }
+                
+                const tree = await response.json();
+                container.innerHTML = '';
+                renderTree(tree, container);
+            } catch (error) {
+                container.innerHTML = `<div class="alert alert-danger">Ошибка: ${error.message}</div>`;
+            }
+        }
+
+        // Рендеринг дерева структуры
+        function renderTree(node, container, level = 0) {
+            const nodeDiv = document.createElement('div');
+            nodeDiv.className = `node level-${level} ${level === 0 ? 'root' : ''}`;
+            
+            const info = `
+                <strong>${node.user.username}</strong><br>
+                <small>Level ${node.level}, Pos ${node.position}</small><br>
+                ${node.tariff ? `<small>${node.tariff.name}</small>` : ''}
+            `;
+            nodeDiv.innerHTML = info;
+            
+            container.appendChild(nodeDiv);
+            
+            // Рендерим детей
+            if (node.children && node.children.length > 0) {
+                const childrenContainer = document.createElement('div');
+                childrenContainer.style.marginLeft = '20px';
+                childrenContainer.style.marginTop = '10px';
+                
+                node.children.forEach(child => {
+                    renderTree(child, childrenContainer, level + 1);
+                });
+                
+                container.appendChild(childrenContainer);
+            }
+        }
+
+        // Загружаем структуру при загрузке страницы
+        window.addEventListener('DOMContentLoaded', loadStructure);
+    </script>
+</body>
+</html>
+

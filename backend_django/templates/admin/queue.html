@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Очередь регистраций - Equilibrium</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="/">
+                <i class="fas fa-chart-line"></i> Equilibrium MLM
+            </a>
+            <div class="navbar-nav ms-auto">
+                <a class="nav-link" href="/">Дашборд</a>
+                <a class="nav-link" href="/structure/">Структура</a>
+                <a class="nav-link active" href="/queue/">Очередь</a>
+                <a class="nav-link" href="/admin/">Django Admin</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid mt-4">
+        <h1 class="mb-4">Очередь регистраций</h1>
+        
+        <div class="mb-3">
+            <button class="btn btn-primary" onclick="loadQueue()">
+                <i class="fas fa-sync"></i> Обновить
+            </button>
+        </div>
+
+        <div id="queue-container">
+            <div class="text-center">
+                <i class="fas fa-spinner fa-spin fa-3x"></i>
+                <p>Загрузка очереди...</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Загрузка очереди из API (данные из БД)
+        async function loadQueue() {
+            const container = document.getElementById('queue-container');
+            container.innerHTML = '<div class="text-center"><i class="fas fa-spinner fa-spin fa-3x"></i><p>Загрузка очереди...</p></div>';
+            
+            try {
+                const response = await fetch('/api/queue/public/');
+                if (!response.ok) {
+                    throw new Error('Ошибка загрузки очереди');
+                }
+                
+                const queue = await response.json();
+                renderQueue(queue, container);
+            } catch (error) {
+                container.innerHTML = `<div class="alert alert-danger">Ошибка: ${error.message}</div>`;
+            }
+        }
+
+        // Рендеринг очереди
+        function renderQueue(queue, container) {
+            if (queue.length === 0) {
+                container.innerHTML = '<div class="alert alert-info">Очередь пуста</div>';
+                return;
+            }
+
+            let html = `
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Username</th>
+                            <th>Email</th>
+                            <th>Пригласивший</th>
+                            <th>Тариф</th>
+                            <th>Сумма</th>
+                            <th>Дата</th>
+                            <th>Действия</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+
+            queue.forEach(item => {
+                html += `
+                    <tr>
+                        <td>${item.id}</td>
+                        <td>${item.username}</td>
+                        <td>${item.email}</td>
+                        <td>${item.inviter_username || 'Нет'}</td>
+                        <td>${item.tariff.name} (${item.tariff.code})</td>
+                        <td>$${item.amount}</td>
+                        <td>${new Date(item.created_at).toLocaleString('ru-RU')}</td>
+                        <td>
+                            <button class="btn btn-sm btn-success" onclick="completeRegistration(${item.user})">
+                                <i class="fas fa-check"></i> Завершить
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            });
+
+            html += '</tbody></table>';
+            container.innerHTML = html;
+        }
+
+        // Завершение регистрации (все расчеты на сервере)
+        async function completeRegistration(userId) {
+            if (!confirm('Завершить регистрацию? Все расчеты будут выполнены на сервере.')) {
+                return;
+            }
+
+            try {
+                // Здесь нужен токен аутентификации для production
+                // Для теста используем публичный endpoint или добавляем токен
+                const response = await fetch('/api/complete/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        // 'Authorization': 'Token YOUR_TOKEN' // Для production
+                    },
+                    body: JSON.stringify({ user_id: userId })
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.error || 'Ошибка завершения регистрации');
+                }
+
+                const result = await response.json();
+                alert(`Регистрация завершена!\nРазмещен на уровне ${result.level}, позиция ${result.position}\nСоздано бонусов: ${result.bonuses_created}`);
+                
+                // Обновляем очередь
+                loadQueue();
+            } catch (error) {
+                alert(`Ошибка: ${error.message}`);
+            }
+        }
+
+        // Загружаем очередь при загрузке страницы
+        window.addEventListener('DOMContentLoaded', loadQueue);
+        
+        // Автообновление каждые 30 секунд
+        setInterval(loadQueue, 30000);
+    </script>
+</body>
+</html>
+

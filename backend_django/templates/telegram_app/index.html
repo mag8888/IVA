@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Equilibrium MLM - Моя структура</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--tg-theme-bg-color, #ffffff);
+            color: var(--tg-theme-text-color, #000000);
+            padding: 10px;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 100%;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
+            padding: 15px;
+            background: var(--tg-theme-secondary-bg-color, #f0f0f0);
+            border-radius: 10px;
+        }
+
+        .header h1 {
+            font-size: 20px;
+            margin-bottom: 5px;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .stat-card {
+            background: var(--tg-theme-secondary-bg-color, #f0f0f0);
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+        }
+
+        .stat-card h3 {
+            font-size: 24px;
+            color: var(--tg-theme-button-color, #3390ec);
+            margin-bottom: 5px;
+        }
+
+        .stat-card p {
+            font-size: 12px;
+            color: var(--tg-theme-hint-color, #999999);
+        }
+
+        .structure-container {
+            background: var(--tg-theme-secondary-bg-color, #f0f0f0);
+            border-radius: 10px;
+            padding: 15px;
+            min-height: 300px;
+        }
+
+        .node {
+            background: var(--tg-theme-button-color, #3390ec);
+            color: var(--tg-theme-button-text-color, #ffffff);
+            padding: 12px 15px;
+            border-radius: 8px;
+            margin: 8px 0;
+            text-align: center;
+            font-size: 14px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .node.root {
+            background: var(--tg-theme-button-color, #3390ec);
+            font-weight: bold;
+        }
+
+        .node.level-1 {
+            background: #28a745;
+            margin-left: 20px;
+        }
+
+        .node.level-2 {
+            background: #ffc107;
+            margin-left: 40px;
+        }
+
+        .node.level-3 {
+            background: #dc3545;
+            margin-left: 60px;
+        }
+
+        .node-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 5px;
+            font-size: 12px;
+            opacity: 0.9;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 50px 20px;
+        }
+
+        .loading .spinner {
+            border: 3px solid var(--tg-theme-secondary-bg-color, #f0f0f0);
+            border-top: 3px solid var(--tg-theme-button-color, #3390ec);
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .error {
+            background: #dc3545;
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+            margin: 20px 0;
+        }
+
+        .refresh-btn {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: var(--tg-theme-button-color, #3390ec);
+            color: var(--tg-theme-button-text-color, #ffffff);
+            border: none;
+            font-size: 20px;
+            cursor: pointer;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .refresh-btn:active {
+            transform: scale(0.95);
+        }
+
+        .empty {
+            text-align: center;
+            padding: 50px 20px;
+            color: var(--tg-theme-hint-color, #999999);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🌳 Моя MLM Структура</h1>
+            <p id="user-info">Загрузка...</p>
+        </div>
+
+        <div class="stats" id="stats">
+            <div class="stat-card">
+                <h3 id="total-partners">-</h3>
+                <p>Партнеров</p>
+            </div>
+            <div class="stat-card">
+                <h3 id="total-bonuses">-</h3>
+                <p>Бонусов</p>
+            </div>
+            <div class="stat-card">
+                <h3 id="green-bonuses">-</h3>
+                <p>Зеленых</p>
+            </div>
+            <div class="stat-card">
+                <h3 id="yellow-bonuses">-</h3>
+                <p>Желтых</p>
+            </div>
+        </div>
+
+        <div class="structure-container">
+            <div id="structure-content">
+                <div class="loading">
+                    <div class="spinner"></div>
+                    <p>Загрузка структуры...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <button class="refresh-btn" onclick="loadData()" title="Обновить">
+        🔄
+    </button>
+
+    <script>
+        // Инициализация Telegram Web App
+        const tg = window.Telegram.WebApp;
+        tg.ready();
+        tg.expand();
+
+        // API URL (берется из переменной окружения или используется текущий домен)
+        const API_URL = window.location.origin.replace(/\/$/, '');
+
+        // Получаем данные пользователя из Telegram
+        const tgUser = tg.initDataUnsafe?.user;
+        const userId = tgUser?.id;
+        const telegramUsername = tgUser?.username;
+        
+        console.log('Telegram User:', tgUser);
+        console.log('User ID:', userId);
+
+        // Обновляем информацию о пользователе
+        if (tgUser) {
+            document.getElementById('user-info').textContent = 
+                `${tgUser.first_name || ''} ${tgUser.last_name || ''}`.trim() || tgUser.username || 'Пользователь';
+        }
+
+        // Загрузка данных
+        async function loadData() {
+            const structureContent = document.getElementById('structure-content');
+            structureContent.innerHTML = '<div class="loading"><div class="spinner"></div><p>Загрузка...</p></div>';
+
+            try {
+                // Сначала получаем список всех узлов структуры
+                const structureListResponse = await fetch(`${API_URL}/api/structure/`);
+                if (!structureListResponse.ok) {
+                    throw new Error('Ошибка загрузки структуры');
+                }
+                const structureList = await structureListResponse.json();
+                
+                // Находим узел текущего пользователя по Telegram ID или username
+                let userNode = null;
+                if (userId || telegramUsername) {
+                    userNode = structureList.find(node => {
+                        const nodeUsername = node.user?.username;
+                        // Ищем по Telegram ID (если username = Telegram ID) или по username
+                        return nodeUsername === String(userId) || nodeUsername === telegramUsername;
+                    });
+                }
+                
+                // Если нашли узел пользователя, загружаем дерево от него
+                // Иначе загружаем полное дерево
+                let rootUserId = null;
+                if (userNode) {
+                    rootUserId = userNode.user.id;
+                }
+                
+                // Загружаем дерево структуры
+                const treeUrl = rootUserId 
+                    ? `${API_URL}/api/structure/tree/?root_user_id=${rootUserId}`
+                    : `${API_URL}/api/structure/tree/`;
+                
+                const structureResponse = await fetch(treeUrl);
+                if (!structureResponse.ok) {
+                    throw new Error('Ошибка загрузки дерева структуры');
+                }
+                const structure = await structureResponse.json();
+
+                // Загружаем статистику бонусов
+                let bonuses = { total: 0, green: 0, yellow: 0 };
+                
+                // Ищем пользователя в БД по Telegram ID или username
+                if (userNode && userNode.user.id) {
+                    try {
+                        const bonusesResponse = await fetch(`${API_URL}/api/bonuses/?user_id=${userNode.user.id}`);
+                        if (bonusesResponse.ok) {
+                            const bonusesList = await bonusesResponse.json();
+                            bonuses.total = bonusesList.reduce((sum, b) => sum + parseFloat(b.amount), 0);
+                            bonuses.green = bonusesList
+                                .filter(b => b.bonus_type === 'GREEN')
+                                .reduce((sum, b) => sum + parseFloat(b.amount), 0);
+                            bonuses.yellow = bonusesList
+                                .filter(b => b.bonus_type === 'YELLOW')
+                                .reduce((sum, b) => sum + parseFloat(b.amount), 0);
+                        }
+                    } catch (e) {
+                        console.error('Ошибка загрузки бонусов:', e);
+                    }
+                }
+
+                // Обновляем статистику
+                updateStats(structure, bonuses);
+
+                // Отображаем структуру
+                renderStructure(structure);
+
+            } catch (error) {
+                structureContent.innerHTML = `
+                    <div class="error">
+                        Ошибка загрузки данных: ${error.message}
+                    </div>
+                `;
+            }
+        }
+
+        // Обновление статистики
+        function updateStats(structure, bonuses) {
+            // Подсчитываем партнеров в структуре
+            function countPartners(node) {
+                let count = 0;
+                if (node.children && node.children.length > 0) {
+                    count = node.children.length;
+                    node.children.forEach(child => {
+                        count += countPartners(child);
+                    });
+                }
+                return count;
+            }
+
+            const totalPartners = structure ? countPartners(structure) : 0;
+
+            document.getElementById('total-partners').textContent = totalPartners;
+            document.getElementById('total-bonuses').textContent = `$${bonuses.total.toFixed(2)}`;
+            document.getElementById('green-bonuses').textContent = `$${bonuses.green.toFixed(2)}`;
+            document.getElementById('yellow-bonuses').textContent = `$${bonuses.yellow.toFixed(2)}`;
+        }
+
+        // Рендеринг структуры
+        function renderStructure(node, level = 0) {
+            if (!node) {
+                document.getElementById('structure-content').innerHTML = 
+                    '<div class="empty">Структура пуста</div>';
+                return;
+            }
+
+            const container = document.getElementById('structure-content');
+            container.innerHTML = '';
+
+            function renderNode(n, lvl) {
+                const nodeDiv = document.createElement('div');
+                nodeDiv.className = `node ${lvl === 0 ? 'root' : ''} level-${Math.min(lvl, 3)}`;
+
+                const userName = n.user?.username || 'Неизвестно';
+                const level = n.level || lvl;
+                const position = n.position || '';
+                const tariff = n.tariff?.name || '';
+
+                nodeDiv.innerHTML = `
+                    <div><strong>${userName}</strong></div>
+                    <div class="node-info">
+                        <span>Level ${level}</span>
+                        ${position ? `<span>Pos ${position}</span>` : ''}
+                        ${tariff ? `<span>${tariff}</span>` : ''}
+                    </div>
+                `;
+
+                container.appendChild(nodeDiv);
+
+                // Рендерим детей
+                if (n.children && n.children.length > 0) {
+                    n.children.forEach(child => {
+                        renderNode(child, lvl + 1);
+                    });
+                }
+            }
+
+            renderNode(node, level);
+        }
+
+        // Загружаем данные при загрузке страницы
+        loadData();
+
+        // Обработка кнопки "Назад" в Telegram
+        tg.BackButton.onClick(() => {
+            tg.close();
+        });
+    </script>
+</body>
+</html>
+
