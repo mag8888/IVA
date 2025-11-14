@@ -4,6 +4,7 @@ Telegram Bot integration для Equilibrium MLM.
 import logging
 import json
 import asyncio
+import secrets
 from django.conf import settings
 from django.http import HttpResponse, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
@@ -11,16 +12,51 @@ from django.views.decorators.http import require_http_methods
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, ContextTypes
 from django.db import models
+from asgiref.sync import sync_to_async
 from core.models import User
 from mlm.models import StructureNode
 from billing.models import Bonus
-import secrets
 
 logger = logging.getLogger(__name__)
 
 # Глобальная переменная для бота
 bot_application = None
 bot_event_loop = None
+
+
+@sync_to_async
+def get_user_by_telegram_id(telegram_id):
+    return User.objects.get(telegram_id=telegram_id)
+
+
+@sync_to_async
+def create_user_from_telegram(telegram_id, telegram_user):
+    username = f"tg_{telegram_id}"
+    if User.objects.filter(username=username).exists():
+        username = f"tg_{telegram_id}_{secrets.token_hex(4)}"
+    return User.objects.create_user(
+        username=username,
+        email=f"tg_{telegram_id}@telegram.local",
+        telegram_id=telegram_id,
+        first_name=telegram_user.first_name,
+        last_name=telegram_user.last_name or '',
+    )
+
+
+@sync_to_async
+def get_node_for_user(db_user):
+    try:
+        return StructureNode.objects.get(user=db_user)
+    except StructureNode.DoesNotExist:
+        return None
+
+
+@sync_to_async
+def get_bonus_summary(db_user):
+    total = Bonus.objects.filter(user=db_user).aggregate(total=models.Sum('amount'))['total'] or 0
+    green = Bonus.objects.filter(user=db_user, bonus_type=Bonus.BonusType.GREEN).aggregate(total=models.Sum('amount'))['total'] or 0
+    yellow = Bonus.objects.filter(user=db_user, bonus_type=Bonus.BonusType.YELLOW).aggregate(total=models.Sum('amount'))['total'] or 0
+    return total, green, yellow
 
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -34,22 +70,12 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     telegram_id = telegram_user.id
     
     try:
-        db_user = User.objects.get(telegram_id=telegram_id)
+        db_user = await get_user_by_telegram_id(telegram_id)
         logger.info(f"✅ Пользователь {telegram_id} найден в БД: {db_user.username}")
     except User.DoesNotExist:
         logger.info(f"ℹ️  Пользователь {telegram_id} не найден в БД, создаем нового")
         try:
-            username = f"tg_{telegram_id}"
-            if User.objects.filter(username=username).exists():
-                username = f"tg_{telegram_id}_{secrets.token_hex(4)}"
-            
-            db_user = User.objects.create_user(
-                username=username,
-                email=f"tg_{telegram_id}@telegram.local",
-                telegram_id=telegram_id,
-                first_name=telegram_user.first_name,
-                last_name=telegram_user.last_name or '',
-            )
+            db_user = await create_user_from_telegram(telegram_id, telegram_user)
             logger.info(f"✅ Создан новый пользователь для Telegram ID {telegram_id}: {db_user.username}")
             
             await update.message.reply_text(
@@ -76,15 +102,12 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             return
     
     try:
-        try:
-            node = StructureNode.objects.get(user=db_user)
+        node = await get_node_for_user(db_user)
+        level_info = "Еще не размещен в структуре"
+        if node:
             level_info = f"Уровень: {node.level}, Позиция: {node.position}"
-        except StructureNode.DoesNotExist:
-            level_info = "Еще не размещен в структуре"
         
-        total_bonuses = Bonus.objects.filter(user=db_user).aggregate(
-            total=models.Sum('amount')
-        )['total'] or 0
+        total_bonuses, _, _ = await get_bonus_summary(db_user)
         
         await update.message.reply_text(
             f"Привет, {db_user.username or telegram_user.first_name}! 👋\n\n"
