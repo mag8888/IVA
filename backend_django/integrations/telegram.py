@@ -226,6 +226,12 @@ def init_telegram_bot():
     # Создаем приложение
     application = Application.builder().token(token).build()
     
+    # Инициализируем приложение (обязательно для обработки событий)
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    loop.run_until_complete(application.initialize())
+    loop.close()
+    
     # Регистрируем обработчики команд
     application.add_handler(CommandHandler("start", start_command))
     application.add_handler(CommandHandler("app", app_command))
