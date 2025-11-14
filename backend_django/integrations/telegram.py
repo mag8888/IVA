@@ -345,6 +345,9 @@ def telegram_webhook(request):
 
 def start_telegram_bot():
     """Запуск Telegram бота (для использования в отдельном процессе)."""
+    # Эта функция больше не используется - бот работает через webhook
+    # Оставлена для обратной совместимости
+    logger.warning("⚠️  start_telegram_bot() больше не используется - бот работает через webhook")
     application = init_telegram_bot()
     if application:
-        start_telegram_bot_async(application)
+        logger.info("✅ Бот инициализирован, но не запущен через polling (используется webhook)")
