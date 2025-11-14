@@ -3,6 +3,7 @@ Telegram Bot integration для Equilibrium MLM.
 """
 import logging
 import json
+import asyncio
 from django.conf import settings
 from django.http import HttpResponse, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
