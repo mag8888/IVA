@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 
 # Глобальная переменная для бота
 bot_application = None
+bot_event_loop = None
 
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -227,10 +228,9 @@ def init_telegram_bot():
     application = Application.builder().token(token).build()
     
     # Инициализируем приложение (обязательно для обработки событий)
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    loop.run_until_complete(application.initialize())
-    loop.close()
+    global bot_event_loop
+    bot_event_loop = asyncio.new_event_loop()
+    bot_event_loop.run_until_complete(application.initialize())
     
     # Регистрируем обработчики команд
     application.add_handler(CommandHandler("start", start_command))
@@ -292,10 +292,10 @@ def start_telegram_bot_webhook(application, webhook_url):
         logger.info(f"📡 Webhook URL: {webhook_url}")
         
         # Устанавливаем webhook
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        result = loop.run_until_complete(setup_webhook(application, webhook_url))
-        loop.close()
+        global bot_event_loop
+        if bot_event_loop is None:
+            bot_event_loop = asyncio.new_event_loop()
+        result = bot_event_loop.run_until_complete(setup_webhook(application, webhook_url))
         if result:
             logger.info("✅ Telegram бот настроен через Webhook")
             return True
@@ -334,43 +334,27 @@ def telegram_webhook(request):
             logger.info(f"📨 Получено обновление от {update.effective_user.id if update.effective_user else 'unknown'}")
         
         # Обрабатываем обновление синхронно, но в отдельном потоке с новым event loop
-        def process_update_async():
-            """Обработка обновления в отдельном потоке."""
+        global bot_event_loop
+        if bot_event_loop is None:
+            bot_event_loop = asyncio.new_event_loop()
+        try:
+            logger.info(f"🔄 Начинаю обработку обновления для пользователя {update.effective_user.id if update.effective_user else 'unknown'}")
+            bot_event_loop.run_until_complete(bot_application.process_update(update))
+            logger.info(f"✅ Обновление успешно обработано для пользователя {update.effective_user.id if update.effective_user else 'unknown'}")
+        except Exception as process_error:
+            logger.error(f"❌ Ошибка при process_update: {process_error}", exc_info=True)
             try:
-                # Создаем новый event loop для этого потока
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                
-                logger.info(f"🔄 Начинаю обработку обновления в потоке для пользователя {update.effective_user.id if update.effective_user else 'unknown'}")
-                
-                # Запускаем обработку обновления
-                try:
-                    loop.run_until_complete(bot_application.process_update(update))
-                    logger.info(f"✅ Обновление успешно обработано для пользователя {update.effective_user.id if update.effective_user else 'unknown'}")
-                except Exception as process_error:
-                    logger.error(f"❌ Ошибка при process_update: {process_error}", exc_info=True)
-                    # Пробуем отправить сообщение об ошибке пользователю
-                    try:
-                        if update.message and update.effective_user:
-                            loop.run_until_complete(
-                                bot_application.bot.send_message(
-                                    chat_id=update.effective_user.id,
-                                    text="❌ Произошла ошибка при обработке команды. Попробуйте позже."
-                                )
-                            )
-                    except Exception as send_error:
-                        logger.error(f"❌ Не удалось отправить сообщение об ошибке: {send_error}")
-                finally:
-                    loop.close()
-            except Exception as e:
-                logger.error(f"❌ Критическая ошибка обработки обновления в потоке: {e}", exc_info=True)
+                if update.message and update.effective_user:
+                    bot_event_loop.run_until_complete(
+                        bot_application.bot.send_message(
+                            chat_id=update.effective_user.id,
+                            text="❌ Произошла ошибка при обработке команды. Попробуйте позже."
+                        )
+                    )
+            except Exception as send_error:
+                logger.error(f"❌ Не удалось отправить сообщение об ошибке: {send_error}")
         
-        # Запускаем обработку в отдельном потоке (не блокируем ответ)
-        thread = threading.Thread(target=process_update_async, daemon=True)
-        thread.start()
-        
-        # Сразу возвращаем ответ Telegram (не ждем обработки)
-        logger.info(f"✅ Webhook запрос принят, обработка запущена в потоке")
+        logger.info(f"✅ Webhook запрос обработан")
         return JsonResponse({"ok": True})
         
     except json.JSONDecodeError as e:
