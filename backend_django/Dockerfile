@@ -26,5 +26,5 @@ RUN timeout 300 python manage.py collectstatic --noinput || true
 RUN timeout 300 python manage.py migrate --noinput || true
 
 # Запуск через start.sh
-CMD ["bash", "start.sh"]
+CMD ["bash", "/app/start.sh"]
 
