@@ -7,7 +7,7 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Рабочая директория
-WORKDIR /app/backend
+WORKDIR /app
 
 # Копируем requirements и устанавливаем зависимости
 COPY requirements.txt .
