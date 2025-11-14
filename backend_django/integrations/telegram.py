@@ -11,6 +11,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, ContextTypes
+from telegram.request import HTTPXRequest
 from django.db import models
 from asgiref.sync import sync_to_async
 from core.models import User
@@ -248,7 +249,13 @@ def init_telegram_bot():
         return None
     
     # Создаем приложение
-    application = Application.builder().token(token).build()
+    request = HTTPXRequest(
+        connect_timeout=10,
+        read_timeout=10,
+        write_timeout=10,
+        pool_timeout=10,
+    )
+    application = Application.builder().token(token).request(request).build()
     
     # Инициализируем приложение (обязательно для обработки событий)
     global bot_event_loop
