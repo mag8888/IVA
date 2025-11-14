@@ -13,6 +13,7 @@ from django.db import models
 from core.models import User
 from mlm.models import StructureNode
 from billing.models import Bonus
+import secrets
 
 logger = logging.getLogger(__name__)
 
@@ -23,24 +24,76 @@ bot_application = None
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Обработчик команды /start."""
     logger.info(f"📥 Получена команда /start от пользователя {update.effective_user.id}")
-    user = update.effective_user
+    telegram_user = update.effective_user
+    telegram_id = telegram_user.id
     
-    # Проверяем, зарегистрирован ли пользователь
+    # Проверяем, зарегистрирован ли пользователь по telegram_id
     try:
-        db_user = User.objects.get(username=str(user.id))
-        logger.info(f"✅ Пользователь {user.id} найден в БД: {db_user.username}")
+        db_user = User.objects.get(telegram_id=telegram_id)
+        logger.info(f"✅ Пользователь {telegram_id} найден в БД: {db_user.username}")
+        
+        # Получаем информацию о структуре, если есть
+        try:
+            node = StructureNode.objects.get(user=db_user)
+            level_info = f"Уровень: {node.level}, Позиция: {node.position}"
+        except StructureNode.DoesNotExist:
+            level_info = "Еще не размещен в структуре"
+        
+        # Получаем общую сумму бонусов
+        total_bonuses = Bonus.objects.filter(user=db_user).aggregate(
+            total=models.Sum('amount')
+        )['total'] or 0
+        
         await update.message.reply_text(
-            f"Привет, {db_user.username}! 👋\n\n"
-            f"Твой реферальный код: {db_user.referral_code}\n\n"
-            f"Используй /app для просмотра структуры."
+            f"Привет, {db_user.username or telegram_user.first_name}! 👋\n\n"
+            f"📊 Твоя информация:\n"
+            f"🔗 Реферальный код: `{db_user.referral_code}`\n"
+            f"📈 Статус: {db_user.get_status_display()}\n"
+            f"🌳 {level_info}\n"
+            f"💰 Всего бонусов: ${total_bonuses:.2f}\n\n"
+            f"Используй команды:\n"
+            f"/app - открыть структуру\n"
+            f"/stats - подробная статистика"
         )
     except User.DoesNotExist:
-        logger.info(f"ℹ️  Пользователь {user.id} не найден в БД, отправляем приветствие")
-        await update.message.reply_text(
-            f"Привет, {user.first_name}! 👋\n\n"
-            f"Добро пожаловать в Equilibrium MLM System!\n\n"
-            f"Для регистрации перейди на веб-сайт или используй /app"
-        )
+        logger.info(f"ℹ️  Пользователь {telegram_id} не найден в БД, создаем нового или отправляем приветствие")
+        
+        # Пробуем создать пользователя автоматически
+        try:
+            # Генерируем уникальный username из telegram_id
+            username = f"tg_{telegram_id}"
+            if User.objects.filter(username=username).exists():
+                username = f"tg_{telegram_id}_{secrets.token_hex(4)}"
+            
+            db_user = User.objects.create_user(
+                username=username,
+                email=f"tg_{telegram_id}@telegram.local",
+                telegram_id=telegram_id,
+                first_name=telegram_user.first_name,
+                last_name=telegram_user.last_name or '',
+            )
+            logger.info(f"✅ Создан новый пользователь для Telegram ID {telegram_id}: {db_user.username}")
+            
+            await update.message.reply_text(
+                f"Привет, {telegram_user.first_name}! 👋\n\n"
+                f"✅ Ты зарегистрирован в Equilibrium MLM System!\n\n"
+                f"📊 Твоя информация:\n"
+                f"👤 Username: {db_user.username}\n"
+                f"🔗 Реферальный код: `{db_user.referral_code}`\n"
+                f"📈 Статус: {db_user.get_status_display()}\n\n"
+                f"Используй команды:\n"
+                f"/app - открыть структуру\n"
+                f"/stats - статистика"
+            )
+        except Exception as e:
+            logger.error(f"❌ Ошибка создания пользователя: {e}", exc_info=True)
+            await update.message.reply_text(
+                f"Привет, {telegram_user.first_name}! 👋\n\n"
+                f"Добро пожаловать в Equilibrium MLM System!\n\n"
+                f"Для полной регистрации перейди на веб-сайт:\n"
+                f"https://iva.up.railway.app\n\n"
+                f"Или используй /app для просмотра структуры."
+            )
 
 
 async def app_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -87,10 +140,11 @@ async def app_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
 async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Обработчик команды /stats - статистика пользователя."""
-    user = update.effective_user
+    telegram_user = update.effective_user
+    telegram_id = telegram_user.id
     
     try:
-        db_user = User.objects.get(username=str(user.id))
+        db_user = User.objects.get(telegram_id=telegram_id)
         
         # Получаем узел структуры
         try:

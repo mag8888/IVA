@@ -46,6 +46,14 @@ class User(AbstractUser):
         verbose_name=_('Активен в MLM')
     )
     
+    telegram_id = models.BigIntegerField(
+        null=True,
+        blank=True,
+        unique=True,
+        verbose_name=_('Telegram ID'),
+        help_text=_('ID пользователя в Telegram')
+    )
+    
     class Meta:
         verbose_name = _('Пользователь')
         verbose_name_plural = _('Пользователи')
