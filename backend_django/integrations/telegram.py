@@ -237,15 +237,15 @@ def init_telegram_bot():
     return application
 
 
-def setup_webhook(application, webhook_url):
+async def setup_webhook(application, webhook_url):
     """Установка webhook для Telegram бота."""
     try:
         # Удаляем предыдущий webhook, если был
-        application.bot.delete_webhook(drop_pending_updates=True)
+        await application.bot.delete_webhook(drop_pending_updates=True)
         logger.info("🗑️  Удален предыдущий webhook")
         
         # Устанавливаем новый webhook
-        result = application.bot.set_webhook(
+        result = await application.bot.set_webhook(
             url=webhook_url,
             allowed_updates=Update.ALL_TYPES,
             drop_pending_updates=True
@@ -255,7 +255,7 @@ def setup_webhook(application, webhook_url):
             logger.info(f"✅ Webhook установлен: {webhook_url}")
             
             # Проверяем информацию о webhook
-            webhook_info = application.bot.get_webhook_info()
+            webhook_info = await application.bot.get_webhook_info()
             logger.info(f"📡 Webhook info: {webhook_info.url}, pending updates: {webhook_info.pending_update_count}")
             return True
         else:
@@ -270,7 +270,7 @@ def remove_webhook(application):
     """Удаление webhook для Telegram бота."""
     try:
         if application and application.bot:
-            application.bot.delete_webhook()
+            asyncio.run(application.bot.delete_webhook())
             logger.info("✅ Webhook удален")
             return True
     except Exception as e:
@@ -285,7 +285,11 @@ def start_telegram_bot_webhook(application, webhook_url):
         logger.info(f"📡 Webhook URL: {webhook_url}")
         
         # Устанавливаем webhook
-        if setup_webhook(application, webhook_url):
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        result = loop.run_until_complete(setup_webhook(application, webhook_url))
+        loop.close()
+        if result:
             logger.info("✅ Telegram бот настроен через Webhook")
             return True
         else:
