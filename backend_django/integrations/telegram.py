@@ -23,49 +23,20 @@ bot_application = None
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Обработчик команды /start."""
+    logger.info(f"📥 Получена команда /start от пользователя {update.effective_user.id if update.effective_user else 'unknown'}")
+    telegram_user = update.effective_user
+    if not telegram_user:
+        logger.error("❌ update.effective_user is None")
+        return
+    
+    telegram_id = telegram_user.id
+    
     try:
-        logger.info(f"📥 Получена команда /start от пользователя {update.effective_user.id}")
-        telegram_user = update.effective_user
-        telegram_id = telegram_user.id
-        
-        if not telegram_user:
-            logger.error("❌ update.effective_user is None")
-            return
-        
-        # Проверяем, зарегистрирован ли пользователь по telegram_id
-        try:
-            db_user = User.objects.get(telegram_id=telegram_id)
-            logger.info(f"✅ Пользователь {telegram_id} найден в БД: {db_user.username}")
-        
-        # Получаем информацию о структуре, если есть
-        try:
-            node = StructureNode.objects.get(user=db_user)
-            level_info = f"Уровень: {node.level}, Позиция: {node.position}"
-        except StructureNode.DoesNotExist:
-            level_info = "Еще не размещен в структуре"
-        
-        # Получаем общую сумму бонусов
-        total_bonuses = Bonus.objects.filter(user=db_user).aggregate(
-            total=models.Sum('amount')
-        )['total'] or 0
-        
-        await update.message.reply_text(
-            f"Привет, {db_user.username or telegram_user.first_name}! 👋\n\n"
-            f"📊 Твоя информация:\n"
-            f"🔗 Реферальный код: `{db_user.referral_code}`\n"
-            f"📈 Статус: {db_user.get_status_display()}\n"
-            f"🌳 {level_info}\n"
-            f"💰 Всего бонусов: ${total_bonuses:.2f}\n\n"
-            f"Используй команды:\n"
-            f"/app - открыть структуру\n"
-            f"/stats - подробная статистика"
-        )
+        db_user = User.objects.get(telegram_id=telegram_id)
+        logger.info(f"✅ Пользователь {telegram_id} найден в БД: {db_user.username}")
     except User.DoesNotExist:
-        logger.info(f"ℹ️  Пользователь {telegram_id} не найден в БД, создаем нового или отправляем приветствие")
-        
-        # Пробуем создать пользователя автоматически
+        logger.info(f"ℹ️  Пользователь {telegram_id} не найден в БД, создаем нового")
         try:
-            # Генерируем уникальный username из telegram_id
             username = f"tg_{telegram_id}"
             if User.objects.filter(username=username).exists():
                 username = f"tg_{telegram_id}_{secrets.token_hex(4)}"
@@ -90,6 +61,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
                 f"/app - открыть структуру\n"
                 f"/stats - статистика"
             )
+            return
         except Exception as e:
             logger.error(f"❌ Ошибка создания пользователя: {e}", exc_info=True)
             await update.message.reply_text(
@@ -99,6 +71,30 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
                 f"https://iva.up.railway.app\n\n"
                 f"Или используй /app для просмотра структуры."
             )
+            return
+    
+    try:
+        try:
+            node = StructureNode.objects.get(user=db_user)
+            level_info = f"Уровень: {node.level}, Позиция: {node.position}"
+        except StructureNode.DoesNotExist:
+            level_info = "Еще не размещен в структуре"
+        
+        total_bonuses = Bonus.objects.filter(user=db_user).aggregate(
+            total=models.Sum('amount')
+        )['total'] or 0
+        
+        await update.message.reply_text(
+            f"Привет, {db_user.username or telegram_user.first_name}! 👋\n\n"
+            f"📊 Твоя информация:\n"
+            f"🔗 Реферальный код: `{db_user.referral_code}`\n"
+            f"📈 Статус: {db_user.get_status_display()}\n"
+            f"🌳 {level_info}\n"
+            f"💰 Всего бонусов: ${total_bonuses:.2f}\n\n"
+            f"Используй команды:\n"
+            f"/app - открыть структуру\n"
+            f"/stats - подробная статистика"
+        )
     except Exception as e:
         logger.error(f"❌ Критическая ошибка в start_command: {e}", exc_info=True)
         try:

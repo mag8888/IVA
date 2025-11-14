@@ -37,6 +37,8 @@ SECRET_KEY = env('DJANGO_SECRET_KEY', default='django-insecure-change-me-in-prod
 DEBUG = env('DJANGO_DEBUG', default=False)
 
 ALLOWED_HOSTS = env.list('DJANGO_ALLOWED_HOSTS', default=['*'])
+if 'healthcheck.railway.app' not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append('healthcheck.railway.app')
 
 # Application definition
 INSTALLED_APPS = [
