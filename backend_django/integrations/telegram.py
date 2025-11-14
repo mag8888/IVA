@@ -23,14 +23,19 @@ bot_application = None
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Обработчик команды /start."""
-    logger.info(f"📥 Получена команда /start от пользователя {update.effective_user.id}")
-    telegram_user = update.effective_user
-    telegram_id = telegram_user.id
-    
-    # Проверяем, зарегистрирован ли пользователь по telegram_id
     try:
-        db_user = User.objects.get(telegram_id=telegram_id)
-        logger.info(f"✅ Пользователь {telegram_id} найден в БД: {db_user.username}")
+        logger.info(f"📥 Получена команда /start от пользователя {update.effective_user.id}")
+        telegram_user = update.effective_user
+        telegram_id = telegram_user.id
+        
+        if not telegram_user:
+            logger.error("❌ update.effective_user is None")
+            return
+        
+        # Проверяем, зарегистрирован ли пользователь по telegram_id
+        try:
+            db_user = User.objects.get(telegram_id=telegram_id)
+            logger.info(f"✅ Пользователь {telegram_id} найден в БД: {db_user.username}")
         
         # Получаем информацию о структуре, если есть
         try:
@@ -94,6 +99,15 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
                 f"https://iva.up.railway.app\n\n"
                 f"Или используй /app для просмотра структуры."
             )
+    except Exception as e:
+        logger.error(f"❌ Критическая ошибка в start_command: {e}", exc_info=True)
+        try:
+            if update.message and update.effective_user:
+                await update.message.reply_text(
+                    "❌ Произошла ошибка при обработке команды. Попробуйте позже или обратитесь к администратору."
+                )
+        except Exception as send_error:
+            logger.error(f"❌ Не удалось отправить сообщение об ошибке: {send_error}")
 
 
 async def app_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -312,7 +326,7 @@ def telegram_webhook(request):
         elif update.message:
             logger.info(f"📨 Получено обновление от {update.effective_user.id if update.effective_user else 'unknown'}")
         
-        # Обрабатываем обновление в отдельном потоке с новым event loop
+        # Обрабатываем обновление синхронно, но в отдельном потоке с новым event loop
         def process_update_async():
             """Обработка обновления в отдельном потоке."""
             try:
@@ -320,19 +334,36 @@ def telegram_webhook(request):
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
                 
-                logger.info(f"🔄 Начинаю обработку обновления в потоке")
+                logger.info(f"🔄 Начинаю обработку обновления в потоке для пользователя {update.effective_user.id if update.effective_user else 'unknown'}")
+                
                 # Запускаем обработку обновления
-                loop.run_until_complete(bot_application.process_update(update))
-                logger.info(f"✅ Обновление успешно обработано")
-                loop.close()
+                try:
+                    loop.run_until_complete(bot_application.process_update(update))
+                    logger.info(f"✅ Обновление успешно обработано для пользователя {update.effective_user.id if update.effective_user else 'unknown'}")
+                except Exception as process_error:
+                    logger.error(f"❌ Ошибка при process_update: {process_error}", exc_info=True)
+                    # Пробуем отправить сообщение об ошибке пользователю
+                    try:
+                        if update.message and update.effective_user:
+                            loop.run_until_complete(
+                                bot_application.bot.send_message(
+                                    chat_id=update.effective_user.id,
+                                    text="❌ Произошла ошибка при обработке команды. Попробуйте позже."
+                                )
+                            )
+                    except Exception as send_error:
+                        logger.error(f"❌ Не удалось отправить сообщение об ошибке: {send_error}")
+                finally:
+                    loop.close()
             except Exception as e:
-                logger.error(f"❌ Ошибка обработки обновления в потоке: {e}", exc_info=True)
+                logger.error(f"❌ Критическая ошибка обработки обновления в потоке: {e}", exc_info=True)
         
         # Запускаем обработку в отдельном потоке (не блокируем ответ)
         thread = threading.Thread(target=process_update_async, daemon=True)
         thread.start()
         
         # Сразу возвращаем ответ Telegram (не ждем обработки)
+        logger.info(f"✅ Webhook запрос принят, обработка запущена в потоке")
         return JsonResponse({"ok": True})
         
     except json.JSONDecodeError as e:
