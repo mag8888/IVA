@@ -3,6 +3,9 @@ API Views для REST API.
 Все расчеты и размещение происходят на сервере.
 """
 import secrets
+import random
+import string
+from decimal import Decimal
 from django.db import transaction, models
 from django.utils import timezone
 from rest_framework.decorators import api_view, permission_classes
@@ -361,3 +364,155 @@ def stats(request):
             "yellow": float(yellow_bonuses),
         },
     })
+
+
+def _get_or_create_root_user(preferred_username=None):
+    """Возвращает пользователя, который будет корнем структуры."""
+    if preferred_username:
+        user, _ = User.objects.get_or_create(
+            username=preferred_username,
+            defaults={
+                "email": f"{preferred_username}@example.com",
+                "status": User.UserStatus.ADMIN,
+                "is_staff": True,
+                "is_superuser": True,
+            },
+        )
+        return user
+
+    user = User.objects.filter(is_superuser=True).first()
+    if user:
+        return user
+
+    # Создаем нового суперпользователя
+    return User.objects.create_superuser(
+        username="root_admin",
+        email="root@example.com",
+        password="root_admin_pass",
+    )
+
+
+def _get_or_create_tariff():
+    """Создает или получает тариф."""
+    tariff, _ = Tariff.objects.get_or_create(
+        code="basic",
+        defaults={
+            "name": "Basic",
+            "entry_amount": Decimal("100.00"),
+            "green_bonus_percent": 50,
+            "yellow_bonus_percent": 50,
+            "is_active": True,
+        },
+    )
+    return tariff
+
+
+def _ensure_root_structure(root_user, tariff):
+    """Создает корневой узел, если его еще нет."""
+    StructureNode.objects.get_or_create(
+        user=root_user,
+        defaults={
+            "parent": None,
+            "position": 1,
+            "level": 0,
+            "tariff": tariff,
+        },
+    )
+    if root_user.status != User.UserStatus.PARTNER:
+        root_user.status = User.UserStatus.PARTNER
+        root_user.save(update_fields=["status"])
+
+
+def _generate_username(seed):
+    """Генерирует уникальное имя пользователя."""
+    suffix = "".join(random.choices(string.ascii_lowercase + string.digits, k=6))
+    return f"demo_partner_{seed+1}_{suffix}"
+
+
+def _create_demo_partners(root_user, tariff, count):
+    """Создает тестовых партнеров."""
+    created_usernames = []
+    for index in range(count):
+        username = _generate_username(index)
+        user, created = User.objects.get_or_create(
+            username=username,
+            defaults={
+                "email": f"{username}@example.com",
+                "status": User.UserStatus.PARTNER,
+                "invited_by": root_user,
+            },
+        )
+        if not created:
+            continue
+
+        payment = Payment.objects.create(
+            user=user,
+            tariff=tariff,
+            amount=tariff.entry_amount,
+            status=Payment.PaymentStatus.COMPLETED,
+            completed_at=timezone.now(),
+        )
+        place_user(user, payment)
+        # Начисляем бонусы
+        apply_signup_bonuses(user, payment)
+        created_usernames.append(username)
+    return created_usernames
+
+
+@api_view(['POST', 'GET'])
+@permission_classes([AllowAny])
+def generate_structure(request):
+    """
+    Генерирует тестовое MLM-дерево для визуализации.
+    Можно вызвать через GET или POST запрос.
+    """
+    try:
+        # Получаем параметры
+        root_username = None
+        children_count = 6
+        
+        if request.method == 'POST':
+            root_username = request.data.get('root_username', None)
+            children_count = request.data.get('children', 6)
+        else:
+            root_username = request.query_params.get('root_username', None)
+            children_count = int(request.query_params.get('children', 6))
+        
+        with transaction.atomic():
+            # 1. Получаем или создаем корневого пользователя
+            root_user = _get_or_create_root_user(root_username)
+            
+            # 2. Получаем или создаем тариф
+            tariff = _get_or_create_tariff()
+            
+            # 3. Создаем корневой узел, если его нет
+            _ensure_root_structure(root_user, tariff)
+            
+            # 4. Создаем тестовых партнеров
+            created_users = _create_demo_partners(root_user, tariff, children_count)
+        
+        # 5. Получаем статистику структуры
+        total_nodes = StructureNode.objects.count()
+        tree = get_structure_tree(root_user, max_depth=None)
+        
+        return Response({
+            "success": True,
+            "message": "Тестовое дерево структуры успешно создано",
+            "root_user": {
+                "id": root_user.id,
+                "username": root_user.username,
+                "referral_code": root_user.referral_code,
+            },
+            "created_partners": created_users,
+            "total_nodes": total_nodes,
+            "structure": tree,
+        }, status=status.HTTP_200_OK)
+    
+    except Exception as e:
+        return Response(
+            {
+                "success": False,
+                "error": str(e),
+            },
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )

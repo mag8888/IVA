@@ -21,6 +21,7 @@ urlpatterns = [
     # Структура MLM
     path('structure/', views.structure, name='api-structure'),
     path('structure/tree/', views.structure_tree, name='api-structure-tree'),
+    path('structure/generate/', views.generate_structure, name='api-generate-structure'),
     
     # Бонусы (из базы данных)
     path('bonuses/', views.bonuses, name='api-bonuses'),
