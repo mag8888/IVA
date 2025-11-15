@@ -8,6 +8,11 @@ from django.views.decorators.http import require_http_methods
 from django.views.generic import TemplateView
 from integrations.telegram import telegram_webhook
 
+# Настройка админки Django
+admin.site.site_header = "Equilibrium MLM Admin"
+admin.site.site_title = "Equilibrium MLM"
+admin.site.index_title = "Панель управления"
+
 @require_http_methods(["GET", "HEAD"])
 def health_check(request):
     """Healthcheck endpoint для Railway."""
