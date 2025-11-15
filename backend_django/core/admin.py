@@ -11,13 +11,18 @@ from billing.models import Payment
 @admin.register(User)
 class UserAdmin(BaseUserAdmin):
     """Админ-панель для пользователей."""
-    list_display = ['username', 'email', 'status', 'referral_code', 'get_invited_by', 'balance', 'get_total_bonuses', 'is_active_mlm', 'date_joined']
+    list_display = ['username', 'email', 'status', 'referral_code', 'get_invited_by', 'get_balance_display', 'get_total_bonuses', 'is_active_mlm', 'date_joined']
     list_filter = ['status', 'is_active_mlm', 'is_staff', 'is_superuser']
     search_fields = ['username', 'email', 'referral_code', 'telegram_id']
     actions = ['add_balance_action', 'add_balance_direct_action']
+    readonly_fields = ['get_balance_info', 'get_balance_history']
     fieldsets = BaseUserAdmin.fieldsets + (
         ('MLM Information', {
-            'fields': ('status', 'referral_code', 'invited_by', 'is_active_mlm', 'telegram_id', 'balance')
+            'fields': ('status', 'referral_code', 'invited_by', 'is_active_mlm', 'telegram_id')
+        }),
+        ('Баланс', {
+            'fields': ('balance', 'get_balance_info', 'get_balance_history'),
+            'classes': ('collapse',)
         }),
     )
     
@@ -40,6 +45,170 @@ class UserAdmin(BaseUserAdmin):
         total = Bonus.objects.filter(user=obj).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
         return f"${total:.2f}"
     get_total_bonuses.short_description = "Бонусы"
+    
+    def get_balance_display(self, obj):
+        """Отображение баланса с цветом."""
+        balance = obj.balance or Decimal('0.00')
+        if balance > 0:
+            color = 'green'
+        elif balance < 0:
+            color = 'red'
+        else:
+            color = 'gray'
+        return format_html(
+            '<span style="color: {}; font-weight: bold;">${:.2f}</span>',
+            color,
+            balance
+        )
+    get_balance_display.short_description = "Баланс"
+    get_balance_display.admin_order_field = 'balance'
+    
+    def get_balance_info(self, obj):
+        """Информация о балансе с кнопками быстрого пополнения."""
+        if not obj.pk:
+            return "Сначала сохраните пользователя"
+        
+        balance = obj.balance or Decimal('0.00')
+        
+        return format_html(
+            '''
+            <div style="padding: 15px; background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 5px; margin: 10px 0;">
+                <h3 style="margin-top: 0; color: #417690;">Текущий баланс: <span style="color: #28a745; font-weight: bold; font-size: 1.2em;">${:.2f}</span></h3>
+                <div style="margin-top: 15px;">
+                    <p style="margin-bottom: 10px; font-weight: bold; color: #333;">💰 Быстрое пополнение:</p>
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 15px;">
+                        <button type="button" onclick="addBalanceQuick(10)" style="padding: 8px 15px; background: #28a745; color: white; border: none; border-radius: 3px; cursor: pointer; font-weight: bold;">+$10</button>
+                        <button type="button" onclick="addBalanceQuick(50)" style="padding: 8px 15px; background: #28a745; color: white; border: none; border-radius: 3px; cursor: pointer; font-weight: bold;">+$50</button>
+                        <button type="button" onclick="addBalanceQuick(100)" style="padding: 8px 15px; background: #28a745; color: white; border: none; border-radius: 3px; cursor: pointer; font-weight: bold;">+$100</button>
+                        <button type="button" onclick="addBalanceQuick(500)" style="padding: 8px 15px; background: #28a745; color: white; border: none; border-radius: 3px; cursor: pointer; font-weight: bold;">+$500</button>
+                        <button type="button" onclick="addBalanceQuick(1000)" style="padding: 8px 15px; background: #28a745; color: white; border: none; border-radius: 3px; cursor: pointer; font-weight: bold;">+$1000</button>
+                    </div>
+                    <div style="margin-top: 15px; display: flex; align-items: center; gap: 10px;">
+                        <input type="number" id="balance_amount" placeholder="Введите сумму" step="0.01" min="0" style="padding: 8px; width: 200px; border: 1px solid #ddd; border-radius: 3px;">
+                        <button type="button" onclick="addBalanceCustom()" style="padding: 8px 15px; background: #417690; color: white; border: none; border-radius: 3px; cursor: pointer; font-weight: bold;">Пополнить</button>
+                    </div>
+                </div>
+                <p style="margin-top: 15px; font-size: 12px; color: #666; border-top: 1px solid #dee2e6; padding-top: 10px;">
+                    💡 <strong>Инструкция:</strong> Нажмите на кнопку быстрого пополнения или введите сумму вручную. 
+                    Баланс автоматически обновится в поле выше. Затем нажмите кнопку "Сохранить" внизу формы.
+                </p>
+            </div>
+            <script>
+                function addBalanceQuick(amount) {{
+                    var balanceField = document.querySelector('#id_balance');
+                    if (balanceField) {{
+                        var currentBalance = parseFloat(balanceField.value) || 0;
+                        var newBalance = (currentBalance + amount).toFixed(2);
+                        balanceField.value = newBalance;
+                        
+                        // Визуальная обратная связь
+                        balanceField.style.background = '#d4edda';
+                        balanceField.style.border = '2px solid #28a745';
+                        balanceField.style.transition = 'all 0.3s ease';
+                        
+                        setTimeout(function() {{
+                            balanceField.style.background = '';
+                            balanceField.style.border = '';
+                        }}, 1000);
+                        
+                        // Показываем уведомление
+                        showNotification('Баланс увеличен на $' + amount + '. Новый баланс: $' + newBalance);
+                    }}
+                }}
+                
+                function addBalanceCustom() {{
+                    var amountInput = document.querySelector('#balance_amount');
+                    var balanceField = document.querySelector('#id_balance');
+                    
+                    if (!amountInput || !balanceField) {{
+                        alert('Ошибка: поле баланса не найдено');
+                        return;
+                    }}
+                    
+                    if (!amountInput.value || parseFloat(amountInput.value) <= 0) {{
+                        alert('Пожалуйста, введите корректную сумму');
+                        amountInput.focus();
+                        return;
+                    }}
+                    
+                    var amount = parseFloat(amountInput.value);
+                    var currentBalance = parseFloat(balanceField.value) || 0;
+                    var newBalance = (currentBalance + amount).toFixed(2);
+                    balanceField.value = newBalance;
+                    
+                    // Визуальная обратная связь
+                    balanceField.style.background = '#d4edda';
+                    balanceField.style.border = '2px solid #28a745';
+                    balanceField.style.transition = 'all 0.3s ease';
+                    
+                    setTimeout(function() {{
+                        balanceField.style.background = '';
+                        balanceField.style.border = '';
+                    }}, 1000);
+                    
+                    // Очищаем поле ввода
+                    amountInput.value = '';
+                    
+                    // Показываем уведомление
+                    showNotification('Баланс увеличен на $' + amount.toFixed(2) + '. Новый баланс: $' + newBalance);
+                }}
+                
+                function showNotification(message) {{
+                    // Создаем элемент уведомления
+                    var notification = document.createElement('div');
+                    notification.style.cssText = 'position: fixed; top: 20px; right: 20px; background: #28a745; color: white; padding: 15px 20px; border-radius: 5px; box-shadow: 0 2px 5px rgba(0,0,0,0.2); z-index: 9999; font-weight: bold;';
+                    notification.textContent = message;
+                    document.body.appendChild(notification);
+                    
+                    // Удаляем уведомление через 3 секунды
+                    setTimeout(function() {{
+                        notification.style.transition = 'opacity 0.5s ease';
+                        notification.style.opacity = '0';
+                        setTimeout(function() {{
+                            document.body.removeChild(notification);
+                        }}, 500);
+                    }}, 3000);
+                }}
+            </script>
+            ''',
+            balance
+        )
+    get_balance_info.short_description = "💰 Управление балансом"
+    
+    def get_balance_history(self, obj):
+        """История операций с балансом."""
+        if not obj.pk:
+            return "Сначала сохраните пользователя"
+        
+        # Получаем последние платежи пользователя
+        payments = Payment.objects.filter(user=obj).order_by('-created_at')[:10]
+        
+        if not payments.exists():
+            return format_html('<p style="color: #666;">Нет операций с балансом</p>')
+        
+        history_html = '<table style="width: 100%; border-collapse: collapse;">'
+        history_html += '<tr style="background: #f0f0f0;"><th style="padding: 5px; border: 1px solid #ddd;">Дата</th><th style="padding: 5px; border: 1px solid #ddd;">Тариф</th><th style="padding: 5px; border: 1px solid #ddd;">Сумма</th><th style="padding: 5px; border: 1px solid #ddd;">Статус</th></tr>'
+        
+        for payment in payments:
+            status_color = {
+                'COMPLETED': 'green',
+                'PENDING': 'orange',
+                'FAILED': 'red',
+                'CANCELLED': 'gray'
+            }.get(payment.status, 'black')
+            
+            history_html += format_html(
+                '<tr><td style="padding: 5px; border: 1px solid #ddd;">{}</td><td style="padding: 5px; border: 1px solid #ddd;">{}</td><td style="padding: 5px; border: 1px solid #ddd;">${:.2f}</td><td style="padding: 5px; border: 1px solid #ddd; color: {};">{}</td></tr>',
+                payment.created_at.strftime('%d.%m.%Y %H:%M'),
+                payment.tariff.name if payment.tariff else '-',
+                payment.amount,
+                status_color,
+                payment.get_status_display()
+            )
+        
+        history_html += '</table>'
+        return format_html(history_html)
+    get_balance_history.short_description = "История платежей"
     
     def add_balance_action(self, request, queryset):
         """Action для пополнения счета выбранных пользователей."""
