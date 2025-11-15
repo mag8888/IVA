@@ -82,6 +82,75 @@ def create_payment_for_user(user, tariff, amount):
 
 
 @sync_to_async
+def pay_from_balance(user, tariff):
+    """
+    Оплатить тариф с баланса пользователя.
+    Возвращает (success, message, payment, new_balance)
+    """
+    from django.db import transaction
+    from django.utils import timezone
+    from mlm.services import place_user
+    from billing.services import apply_signup_bonuses
+    from mlm.models import StructureNode
+    
+    try:
+        with transaction.atomic():
+            # Обновляем пользователя из БД для получения актуального баланса
+            user.refresh_from_db()
+            
+            # Проверяем достаточность баланса
+            if user.balance < tariff.entry_amount:
+                return False, f"❌ Недостаточно средств на балансе. Текущий баланс: ${user.balance:.2f}, требуется: ${tariff.entry_amount:.2f}", None, user.balance
+            
+            # Создаем платеж со статусом COMPLETED
+            payment = Payment.objects.create(
+                user=user,
+                tariff=tariff,
+                amount=tariff.entry_amount,
+                status=Payment.PaymentStatus.COMPLETED,
+                completed_at=timezone.now(),
+                metadata={'payment_method': 'balance', 'source': 'telegram_bot'}
+            )
+            
+            # Списываем сумму с баланса
+            user.balance -= tariff.entry_amount
+            user.save()
+            
+            # Проверяем, размещен ли пользователь в структуре
+            is_placed = StructureNode.objects.filter(user=user).exists()
+            
+            # Если пользователь еще не размещен и еще не партнер, размещаем его
+            if not is_placed:
+                # Меняем статус на PARTNER (если еще не партнер)
+                if user.status == User.UserStatus.PARTICIPANT:
+                    user.status = User.UserStatus.PARTNER
+                    user.save()
+                
+                # Размещаем в структуре
+                try:
+                    structure_node = place_user(user, payment)
+                    logger.info(f"✅ Пользователь {user.username} размещен в структуре: Level {structure_node.level}, Position {structure_node.position}")
+                except Exception as e:
+                    logger.error(f"❌ Ошибка при размещении пользователя в структуре: {e}")
+                    # Если пользователь уже размещен или другая ошибка, продолжаем
+                    # Это может быть, если пользователь уже размещен или структура заполнена
+            
+            # Начисляем бонусы (всегда, независимо от размещения)
+            try:
+                bonuses = apply_signup_bonuses(user, payment)
+                logger.info(f"✅ Начислено бонусов: {len(bonuses)}")
+            except Exception as e:
+                logger.error(f"❌ Ошибка при начислении бонусов: {e}")
+                # Продолжаем, даже если начисление бонусов не удалось
+            
+            return True, f"✅ Платеж успешно выполнен! Тариф: {tariff.name}, Сумма: ${tariff.entry_amount:.2f}", payment, user.balance
+            
+    except Exception as e:
+        logger.error(f"❌ Ошибка при оплате с баланса: {e}", exc_info=True)
+        return False, f"❌ Ошибка при оплате: {str(e)}", None, user.balance if hasattr(user, 'balance') else 0
+
+
+@sync_to_async
 def get_invited_stats(db_user):
     """Получить статистику приглашенных пользователей."""
     # Все приглашенные пользователи
@@ -259,6 +328,9 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         # Получаем реферальную ссылку
         referral_link = await get_referral_link(db_user, context.bot)
         
+        # Получаем баланс пользователя
+        user_balance = db_user.balance or 0
+        
         # Получаем имя пользователя (предпочтительно first_name из Telegram)
         if telegram_user.first_name:
             user_name = telegram_user.first_name
@@ -275,12 +347,19 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         # Проверяем наличие тарифов для кнопки оплаты
         tariffs = await get_active_tariffs()
         
-        # Добавляем кнопку оплаты (всегда показываем)
+        # Добавляем кнопки оплаты
         keyboard = []
         keyboard.append([InlineKeyboardButton(
             "💳 Оплатить",
             callback_data="pay_select_tariff"
         )])
+        
+        # Добавляем кнопку оплаты с баланса, если есть баланс
+        if user_balance > 0:
+            keyboard.append([InlineKeyboardButton(
+                f"💰 Оплатить с баланса (${user_balance:.2f})",
+                callback_data="pay_from_balance"
+            )])
         
         reply_markup = InlineKeyboardMarkup(keyboard)
         
@@ -291,6 +370,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             f"📊 Твоя информация:\n"
             f"📈 Статус: {db_user.get_status_display()}\n"
             f"🌳 {level_info}\n"
+            f"💵 Баланс: ${user_balance:.2f}\n"
             f"💚 Бонус вывод: ${green_bonuses:.2f}\n"
             f"💛 Бонус накопительный: ${yellow_bonuses:.2f}\n"
             f"💰 Всего бонусов: ${total_bonuses:.2f}\n\n"
@@ -443,8 +523,111 @@ async def payment_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             reply_markup=reply_markup
         )
     
+    elif query.data == "pay_from_balance":
+        # Показываем список тарифов для оплаты с баланса
+        tariffs = await get_active_tariffs()
+        user_balance = db_user.balance or 0
+        
+        if not tariffs:
+            await query.edit_message_text("❌ Нет доступных тарифов для оплаты.")
+            return
+        
+        if user_balance <= 0:
+            await query.edit_message_text(
+                f"❌ У вас нет средств на балансе. Текущий баланс: ${user_balance:.2f}\n\n"
+                f"Используйте /start для возврата в главное меню."
+            )
+            return
+        
+        # Фильтруем тарифы, которые можно оплатить с баланса
+        affordable_tariffs = [t for t in tariffs if t.entry_amount <= user_balance]
+        
+        if not affordable_tariffs:
+            await query.edit_message_text(
+                f"❌ Недостаточно средств на балансе для оплаты любого тарифа.\n\n"
+                f"Текущий баланс: ${user_balance:.2f}\n"
+                f"Минимальный тариф: ${min(t.entry_amount for t in tariffs):.2f}\n\n"
+                f"Используйте /start для возврата в главное меню."
+            )
+            return
+        
+        # Создаем кнопки для выбора тарифа
+        keyboard = []
+        for tariff in affordable_tariffs:
+            keyboard.append([InlineKeyboardButton(
+                f"{tariff.name} - ${tariff.entry_amount}",
+                callback_data=f"pay_balance_{tariff.id}"
+            )])
+        
+        keyboard.append([InlineKeyboardButton("↩️ Назад", callback_data="pay_select_tariff")])
+        
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        tariffs_text = "\n".join([
+            f"• {tariff.name} - ${tariff.entry_amount}"
+            for tariff in affordable_tariffs
+        ])
+        
+        await query.edit_message_text(
+            f"💰 Оплата с баланса:\n\n"
+            f"Ваш баланс: ${user_balance:.2f}\n\n"
+            f"Доступные тарифы:\n{tariffs_text}\n\n"
+            f"Выберите тариф для оплаты:",
+            reply_markup=reply_markup
+        )
+    
+    elif query.data.startswith("pay_balance_"):
+        # Оплата выбранного тарифа с баланса
+        tariff_id = int(query.data.split("_")[-1])
+        tariffs = await get_active_tariffs()
+        selected_tariff = next((t for t in tariffs if t.id == tariff_id), None)
+        
+        if not selected_tariff:
+            await query.edit_message_text("❌ Тариф не найден.")
+            return
+        
+        # Обновляем пользователя из БД
+        db_user = await get_user_by_telegram_id(telegram_id)
+        user_balance = db_user.balance or 0
+        
+        # Проверяем достаточность баланса
+        if user_balance < selected_tariff.entry_amount:
+            await query.edit_message_text(
+                f"❌ Недостаточно средств на балансе.\n\n"
+                f"Текущий баланс: ${user_balance:.2f}\n"
+                f"Требуется: ${selected_tariff.entry_amount:.2f}\n\n"
+                f"Используйте /start для возврата в главное меню."
+            )
+            return
+        
+        # Выполняем оплату с баланса
+        success, message, payment, new_balance = await pay_from_balance(db_user, selected_tariff)
+        
+        if success:
+            keyboard = [[InlineKeyboardButton("🏠 Главное меню", callback_data="start_menu")]]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await query.edit_message_text(
+                f"{message}\n\n"
+                f"Новый баланс: ${new_balance:.2f}\n\n"
+                f"Платеж ID: {payment.id}",
+                reply_markup=reply_markup
+            )
+        else:
+            await query.edit_message_text(
+                f"{message}\n\n"
+                f"Используйте /start для возврата в главное меню."
+            )
+    
     elif query.data == "pay_cancel":
         await query.edit_message_text("❌ Оплата отменена. Используйте /start для возврата в главное меню.")
+    
+    elif query.data == "start_menu":
+        # Возврат в главное меню - просто отправляем сообщение с инструкцией
+        await query.edit_message_text(
+            "🏠 Главное меню\n\n"
+            "Отправьте /start для возврата в главное меню."
+        )
 
 
 async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

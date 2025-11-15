@@ -54,6 +54,14 @@ class User(AbstractUser):
         help_text=_('ID пользователя в Telegram')
     )
     
+    balance = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=0.00,
+        verbose_name=_('Баланс'),
+        help_text=_('Баланс пользователя в долларах')
+    )
+    
     class Meta:
         verbose_name = _('Пользователь')
         verbose_name_plural = _('Пользователи')

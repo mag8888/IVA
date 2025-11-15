@@ -11,13 +11,13 @@ from billing.models import Payment
 @admin.register(User)
 class UserAdmin(BaseUserAdmin):
     """Админ-панель для пользователей."""
-    list_display = ['username', 'email', 'status', 'referral_code', 'get_invited_by', 'get_total_bonuses', 'is_active_mlm', 'date_joined']
+    list_display = ['username', 'email', 'status', 'referral_code', 'get_invited_by', 'balance', 'get_total_bonuses', 'is_active_mlm', 'date_joined']
     list_filter = ['status', 'is_active_mlm', 'is_staff', 'is_superuser']
     search_fields = ['username', 'email', 'referral_code', 'telegram_id']
-    actions = ['add_balance_action']
+    actions = ['add_balance_action', 'add_balance_direct_action']
     fieldsets = BaseUserAdmin.fieldsets + (
         ('MLM Information', {
-            'fields': ('status', 'referral_code', 'invited_by', 'is_active_mlm', 'telegram_id')
+            'fields': ('status', 'referral_code', 'invited_by', 'is_active_mlm', 'telegram_id', 'balance')
         }),
     )
     
@@ -167,3 +167,108 @@ class UserAdmin(BaseUserAdmin):
         """
         return HttpResponse(html)
     add_balance_action.short_description = "💳 Пополнить счет (создать платеж)"
+    
+    def add_balance_direct_action(self, request, queryset):
+        """Action для прямого пополнения баланса выбранных пользователей."""
+        from django.http import HttpResponse
+        from django.middleware.csrf import get_token
+        
+        # Проверяем, была ли отправлена форма
+        if request.method == 'POST' and 'amount' in request.POST:
+            amount = request.POST.get('amount')
+            
+            if not amount:
+                self.message_user(request, "❌ Не указана сумма", level='error')
+                return
+            
+            try:
+                amount_decimal = Decimal(amount)
+                
+                updated_count = 0
+                for user in queryset:
+                    user.balance += amount_decimal
+                    user.save()
+                    updated_count += 1
+                
+                self.message_user(
+                    request,
+                    f"✅ Пополнен баланс {updated_count} пользователям на сумму ${amount_decimal}",
+                    level='success'
+                )
+                from django.http import HttpResponseRedirect
+                return HttpResponseRedirect(request.path)
+            except Exception as e:
+                self.message_user(request, f"❌ Ошибка: {e}", level='error')
+                return
+        
+        # Отображаем форму ввода суммы
+        csrf_token = get_token(request)
+        user_ids = ','.join(str(u.id) for u in queryset)
+        
+        html = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Пополнение баланса</title>
+            <style>
+                body {{
+                    font-family: Arial, sans-serif;
+                    max-width: 600px;
+                    margin: 50px auto;
+                    padding: 20px;
+                }}
+                h2 {{
+                    color: #417690;
+                }}
+                form {{
+                    margin-top: 20px;
+                }}
+                label {{
+                    display: block;
+                    margin-top: 15px;
+                    font-weight: bold;
+                }}
+                input[type="number"] {{
+                    width: 100%;
+                    padding: 8px;
+                    margin-top: 5px;
+                    box-sizing: border-box;
+                }}
+                .button {{
+                    padding: 10px 20px;
+                    margin-top: 20px;
+                    border: none;
+                    cursor: pointer;
+                    text-decoration: none;
+                    display: inline-block;
+                }}
+                .submit {{
+                    background: #417690;
+                    color: white;
+                }}
+                .cancel {{
+                    background: #ba2121;
+                    color: white;
+                    margin-left: 10px;
+                }}
+            </style>
+        </head>
+        <body>
+            <h2>💰 Пополнение баланса</h2>
+            <p><strong>Выбрано пользователей: {queryset.count()}</strong></p>
+            <form method="post" action="">
+                <input type="hidden" name="csrfmiddlewaretoken" value="{csrf_token}" />
+                <input type="hidden" name="action" value="add_balance_direct_action" />
+                <input type="hidden" name="_selected_action" value="{user_ids}" />
+                <label for="amount">Сумма пополнения баланса ($):</label>
+                <input type="number" name="amount" id="amount" step="0.01" min="0" required />
+                <div>
+                    <input type="submit" class="button submit" value="Пополнить баланс" />
+                    <a href="/admin/core/user/" class="button cancel">Отмена</a>
+                </div>
+            </form>
+        </body>
+        </html>
+        """
+        return HttpResponse(html)
+    add_balance_direct_action.short_description = "💰 Пополнить баланс (напрямую)"
