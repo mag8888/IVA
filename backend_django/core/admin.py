@@ -61,7 +61,6 @@ class UserAdmin(BaseUserAdmin):
             )
         return "0/0"
     get_invited_count.short_description = "Приглашено"
-    get_invited_count.admin_order_field = 'invited_users'
     
     def get_total_bonuses(self, obj):
         """Получить общую сумму бонусов пользователя."""
