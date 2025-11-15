@@ -16,6 +16,7 @@ env = environ.Env(
     DJANGO_SECRET_KEY=(str, ''),
     DATABASE_URL=(str, ''),
     TELEGRAM_BOT_TOKEN=(str, ''),
+    TELEGRAM_BOT_USERNAME=(str, ''),
     TELEGRAM_WEBAPP_URL=(str, ''),
     TELEGRAM_WEBHOOK_URL=(str, ''),
     RAILWAY_PUBLIC_DOMAIN=(str, ''),
@@ -148,6 +149,7 @@ MLM_SETTINGS = {
 
 # Telegram Bot Settings
 TELEGRAM_BOT_TOKEN = env('TELEGRAM_BOT_TOKEN', default='')
+TELEGRAM_BOT_USERNAME = env('TELEGRAM_BOT_USERNAME', default='Equilibrium_Club_bot')  # По умолчанию Equilibrium_Club_bot
 TELEGRAM_WEBAPP_URL = env('TELEGRAM_WEBAPP_URL', default='')
 TELEGRAM_WEBHOOK_URL = env('TELEGRAM_WEBHOOK_URL', default='')
 

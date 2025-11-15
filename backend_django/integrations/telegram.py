@@ -537,34 +537,30 @@ def init_telegram_bot():
     bot_event_loop.run_until_complete(application.initialize())
     
     # Получаем username бота при инициализации
-    try:
-        # Используем bot.bot для доступа к Bot объекту
-        bot_info = bot_event_loop.run_until_complete(application.bot.get_me())
-        logger.info(f"🔍 Bot info получен: {bot_info}")
-        if bot_info:
-            # Проверяем различные способы получения username
-            username = getattr(bot_info, 'username', None)
-            if not username:
-                username = getattr(bot_info, 'first_name', None)  # Fallback
-            if username:
-                bot_username = username
-                logger.info(f"✅ Получен username бота при инициализации: {bot_username}")
-            else:
-                logger.warning(f"⚠️  Username не найден в bot_info: {bot_info}")
-                # Пытаемся получить из настроек
-                bot_username = getattr(settings, 'TELEGRAM_BOT_USERNAME', None)
-                if bot_username:
-                    logger.info(f"✅ Используется username бота из настроек: {bot_username}")
+    # Сначала проверяем настройки (быстрее и надежнее)
+    bot_username = getattr(settings, 'TELEGRAM_BOT_USERNAME', None)
+    if bot_username:
+        logger.info(f"✅ Используется username бота из настроек: {bot_username}")
+    else:
+        # Если нет в настройках, пытаемся получить из API
+        try:
+            bot_info = bot_event_loop.run_until_complete(application.bot.get_me())
+            logger.info(f"🔍 Bot info получен: {bot_info}")
+            if bot_info:
+                # Получаем username из bot_info
+                username = getattr(bot_info, 'username', None)
+                if username:
+                    bot_username = username
+                    logger.info(f"✅ Получен username бота из API: {bot_username}")
                 else:
-                    logger.warning("⚠️  Username бота не найден, реферальные ссылки будут использовать веб-версию")
-        else:
-            logger.warning("⚠️  bot_info is None")
-            bot_username = getattr(settings, 'TELEGRAM_BOT_USERNAME', None)
-    except Exception as e:
-        logger.error(f"❌ Не удалось получить username бота при инициализации: {e}", exc_info=True)
-        bot_username = getattr(settings, 'TELEGRAM_BOT_USERNAME', None)
-        if bot_username:
-            logger.info(f"✅ Используется username бота из настроек (fallback): {bot_username}")
+                    logger.warning(f"⚠️  Username не найден в bot_info: {bot_info}")
+                    logger.warning("⚠️  Реферальные ссылки будут использовать веб-версию. Установите TELEGRAM_BOT_USERNAME в настройках.")
+            else:
+                logger.warning("⚠️  bot_info is None")
+                logger.warning("⚠️  Реферальные ссылки будут использовать веб-версию. Установите TELEGRAM_BOT_USERNAME в настройках.")
+        except Exception as e:
+            logger.error(f"❌ Не удалось получить username бота при инициализации: {e}", exc_info=True)
+            logger.warning("⚠️  Реферальные ссылки будут использовать веб-версию. Установите TELEGRAM_BOT_USERNAME в настройках.")
     
     # Регистрируем обработчики команд
     application.add_handler(CommandHandler("start", start_command))
