@@ -195,7 +195,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             total_invited, invited_with_payment = await get_invited_stats(db_user)
             
             # Получаем реферальную ссылку
-            referral_link = await get_referral_link(db_user, update.message.bot)
+            referral_link = await get_referral_link(db_user, context.bot)
             
             # Формируем сообщение в новом формате
             message_text = (
@@ -239,7 +239,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         total_invited, invited_with_payment = await get_invited_stats(db_user)
         
         # Получаем реферальную ссылку
-        referral_link = await get_referral_link(db_user, update.message.bot)
+        referral_link = await get_referral_link(db_user, context.bot)
         
         # Получаем имя пользователя (предпочтительно first_name из Telegram)
         if telegram_user.first_name:
