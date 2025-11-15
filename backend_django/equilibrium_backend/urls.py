@@ -23,6 +23,7 @@ def health_check(request):
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    path('admin/dashboard/', include('core.admin_views')),
     path('api/', include('api.urls')),
     path('health/', health_check, name='health'),
     path('telegram-app/', TemplateView.as_view(template_name='telegram_app/index.html'), name='telegram-app'),

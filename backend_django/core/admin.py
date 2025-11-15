@@ -2,23 +2,31 @@ from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.utils.html import format_html
 from django.utils import timezone
+from django.db.models import Sum, Count, Q
+from django.urls import reverse
 from decimal import Decimal
 from .models import User
-from mlm.models import Tariff
-from billing.models import Payment
+from mlm.models import Tariff, StructureNode
+from billing.models import Payment, Bonus
 
 
 @admin.register(User)
 class UserAdmin(BaseUserAdmin):
     """Админ-панель для пользователей."""
-    list_display = ['username', 'email', 'status', 'referral_code', 'get_invited_by', 'get_balance_display', 'get_total_bonuses', 'is_active_mlm', 'date_joined']
-    list_filter = ['status', 'is_active_mlm', 'is_staff', 'is_superuser']
+    list_display = ['username', 'email', 'status', 'referral_code', 'get_invited_by', 'get_balance_display', 'get_total_bonuses', 'get_invited_count', 'is_active_mlm', 'date_joined']
+    list_filter = ['status', 'is_active_mlm', 'is_staff', 'is_superuser', 'date_joined']
     search_fields = ['username', 'email', 'referral_code', 'telegram_id']
     actions = ['add_balance_action', 'add_balance_direct_action']
-    readonly_fields = ['get_balance_info', 'get_balance_history']
+    readonly_fields = ['get_balance_info', 'get_balance_history', 'get_structure_info', 'get_referral_stats']
+    date_hierarchy = 'date_joined'
+    
     fieldsets = BaseUserAdmin.fieldsets + (
         ('MLM Information', {
-            'fields': ('status', 'referral_code', 'invited_by', 'is_active_mlm', 'telegram_id')
+            'fields': ('status', 'referral_code', 'invited_by', 'is_active_mlm', 'telegram_id', 'get_referral_stats')
+        }),
+        ('Структура', {
+            'fields': ('get_structure_info',),
+            'classes': ('collapse',)
         }),
         ('Баланс', {
             'fields': ('balance', 'get_balance_info', 'get_balance_history'),
@@ -30,38 +38,155 @@ class UserAdmin(BaseUserAdmin):
         """Отображение партнера с ссылкой на него."""
         if obj.invited_by:
             return format_html(
-                '<a href="/admin/core/user/{}/change/">{}</a>',
-                obj.invited_by.id,
+                '<a href="{}">{}</a>',
+                reverse('admin:core_user_change', args=[obj.invited_by.id]),
                 obj.invited_by.username
             )
         return "-"
     get_invited_by.short_description = "Партнер"
     get_invited_by.admin_order_field = 'invited_by'
     
+    def get_invited_count(self, obj):
+        """Количество приглашенных пользователей."""
+        total = obj.invited_users.count()
+        with_payment = obj.invited_users.filter(
+            payments__status=Payment.PaymentStatus.COMPLETED
+        ).distinct().count()
+        
+        if total > 0:
+            return format_html(
+                '<span style="color: #417690; font-weight: bold;">{}/{}</span>',
+                with_payment,
+                total
+            )
+        return "0/0"
+    get_invited_count.short_description = "Приглашено"
+    get_invited_count.admin_order_field = 'invited_users'
+    
     def get_total_bonuses(self, obj):
         """Получить общую сумму бонусов пользователя."""
-        from billing.models import Bonus
-        from django.db.models import Sum
         total = Bonus.objects.filter(user=obj).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
-        return f"${total:.2f}"
+        green = Bonus.objects.filter(user=obj, bonus_type=Bonus.BonusType.GREEN).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+        yellow = Bonus.objects.filter(user=obj, bonus_type=Bonus.BonusType.YELLOW).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+        
+        return format_html(
+            '<div style="line-height: 1.4;">'
+            '<span style="color: #28a745;">💚 ${:.2f}</span><br>'
+            '<span style="color: #ffc107;">💛 ${:.2f}</span><br>'
+            '<strong>💰 ${:.2f}</strong>'
+            '</div>',
+            green, yellow, total
+        )
     get_total_bonuses.short_description = "Бонусы"
     
     def get_balance_display(self, obj):
         """Отображение баланса с цветом."""
         balance = obj.balance or Decimal('0.00')
         if balance > 0:
-            color = 'green'
+            color = '#28a745'
+            icon = '💰'
         elif balance < 0:
-            color = 'red'
+            color = '#dc3545'
+            icon = '⚠️'
         else:
-            color = 'gray'
+            color = '#6c757d'
+            icon = '💵'
         return format_html(
-            '<span style="color: {}; font-weight: bold;">${:.2f}</span>',
+            '<span style="color: {}; font-weight: bold; font-size: 1.1em;">{} ${:.2f}</span>',
             color,
+            icon,
             balance
         )
     get_balance_display.short_description = "Баланс"
     get_balance_display.admin_order_field = 'balance'
+    
+    def get_structure_info(self, obj):
+        """Информация о структуре пользователя."""
+        if not obj.pk:
+            return "Сначала сохраните пользователя"
+        
+        try:
+            node = obj.structure_node
+        except StructureNode.DoesNotExist:
+            return format_html('<p style="color: #dc3545;">⚠️ Пользователь не размещен в структуре</p>')
+        
+        children = node.children.all()
+        children_count = children.count()
+        
+        # Получаем информацию о родителе
+        parent_info = ""
+        if node.parent:
+            parent_node = StructureNode.objects.filter(user=node.parent).first()
+            if parent_node:
+                parent_info = format_html(
+                    '<p><strong>Родитель:</strong> <a href="{}">{}</a> (Уровень {}, Позиция {})</p>',
+                    reverse('admin:core_user_change', args=[node.parent.id]),
+                    node.parent.username,
+                    parent_node.level,
+                    parent_node.position
+                )
+        
+        # Информация о детях
+        children_html = ""
+        if children_count > 0:
+            children_html = '<div style="margin-top: 10px;"><strong>Дети ({})</strong><ul style="margin: 5px 0; padding-left: 20px;">'.format(children_count)
+            for child in children:
+                children_html += format_html(
+                    '<li><a href="{}">{}</a> (Позиция {})</li>',
+                    reverse('admin:core_user_change', args=[child.user.id]),
+                    child.user.username,
+                    child.position
+                )
+            children_html += '</ul></div>'
+        else:
+            children_html = '<p style="color: #6c757d; margin-top: 10px;">Нет детей в структуре</p>'
+        
+        return format_html(
+            '<div style="padding: 15px; background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 5px;">'
+            '<h3 style="margin-top: 0; color: #417690;">🌳 Информация о структуре</h3>'
+            '<p><strong>Уровень:</strong> {}</p>'
+            '<p><strong>Позиция:</strong> {}</p>'
+            '<p><strong>Тариф:</strong> {}</p>'
+            '{}'
+            '{}'
+            '</div>',
+            node.level,
+            node.position,
+            node.tariff.name if node.tariff else 'Не указан',
+            parent_info,
+            children_html
+        )
+    get_structure_info.short_description = "🌳 Структура"
+    
+    def get_referral_stats(self, obj):
+        """Статистика по реферальной программе."""
+        if not obj.pk:
+            return "Сначала сохраните пользователя"
+        
+        total_invited = obj.invited_users.count()
+        invited_with_payment = obj.invited_users.filter(
+            payments__status=Payment.PaymentStatus.COMPLETED
+        ).distinct().count()
+        
+        total_payments = Payment.objects.filter(
+            user__in=obj.invited_users.all(),
+            status=Payment.PaymentStatus.COMPLETED
+        ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+        
+        return format_html(
+            '<div style="padding: 10px; background: #e7f3ff; border: 1px solid #b3d9ff; border-radius: 5px; margin: 10px 0;">'
+            '<p><strong>📊 Статистика рефералов:</strong></p>'
+            '<p>Всего приглашено: <strong>{}</strong></p>'
+            '<p>С оплатой: <strong style="color: #28a745;">{}</strong></p>'
+            '<p>Общая сумма платежей: <strong style="color: #417690;">${:.2f}</strong></p>'
+            '<p style="margin-top: 10px; margin-bottom: 0;">Реферальная ссылка: <code style="background: white; padding: 2px 5px; border-radius: 3px;">https://t.me/Equilibrium_Club_bot?start={}</code></p>'
+            '</div>',
+            total_invited,
+            invited_with_payment,
+            total_payments,
+            obj.referral_code
+        )
+    get_referral_stats.short_description = "📊 Реферальная статистика"
     
     def get_balance_info(self, obj):
         """Информация о балансе с кнопками быстрого пополнения."""
@@ -77,15 +202,15 @@ class UserAdmin(BaseUserAdmin):
                 <div style="margin-top: 15px;">
                     <p style="margin-bottom: 10px; font-weight: bold; color: #333;">💰 Быстрое пополнение:</p>
                     <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 15px;">
-                        <button type="button" onclick="addBalanceQuick(10)" style="padding: 8px 15px; background: #28a745; color: white; border: none; border-radius: 3px; cursor: pointer; font-weight: bold;">+$10</button>
-                        <button type="button" onclick="addBalanceQuick(50)" style="padding: 8px 15px; background: #28a745; color: white; border: none; border-radius: 3px; cursor: pointer; font-weight: bold;">+$50</button>
-                        <button type="button" onclick="addBalanceQuick(100)" style="padding: 8px 15px; background: #28a745; color: white; border: none; border-radius: 3px; cursor: pointer; font-weight: bold;">+$100</button>
-                        <button type="button" onclick="addBalanceQuick(500)" style="padding: 8px 15px; background: #28a745; color: white; border: none; border-radius: 3px; cursor: pointer; font-weight: bold;">+$500</button>
-                        <button type="button" onclick="addBalanceQuick(1000)" style="padding: 8px 15px; background: #28a745; color: white; border: none; border-radius: 3px; cursor: pointer; font-weight: bold;">+$1000</button>
+                        <button type="button" onclick="addBalanceQuick(10)" style="padding: 8px 15px; background: #28a745; color: white; border: none; border-radius: 3px; cursor: pointer; font-weight: bold; transition: all 0.2s;">+$10</button>
+                        <button type="button" onclick="addBalanceQuick(50)" style="padding: 8px 15px; background: #28a745; color: white; border: none; border-radius: 3px; cursor: pointer; font-weight: bold; transition: all 0.2s;">+$50</button>
+                        <button type="button" onclick="addBalanceQuick(100)" style="padding: 8px 15px; background: #28a745; color: white; border: none; border-radius: 3px; cursor: pointer; font-weight: bold; transition: all 0.2s;">+$100</button>
+                        <button type="button" onclick="addBalanceQuick(500)" style="padding: 8px 15px; background: #28a745; color: white; border: none; border-radius: 3px; cursor: pointer; font-weight: bold; transition: all 0.2s;">+$500</button>
+                        <button type="button" onclick="addBalanceQuick(1000)" style="padding: 8px 15px; background: #28a745; color: white; border: none; border-radius: 3px; cursor: pointer; font-weight: bold; transition: all 0.2s;">+$1000</button>
                     </div>
                     <div style="margin-top: 15px; display: flex; align-items: center; gap: 10px;">
                         <input type="number" id="balance_amount" placeholder="Введите сумму" step="0.01" min="0" style="padding: 8px; width: 200px; border: 1px solid #ddd; border-radius: 3px;">
-                        <button type="button" onclick="addBalanceCustom()" style="padding: 8px 15px; background: #417690; color: white; border: none; border-radius: 3px; cursor: pointer; font-weight: bold;">Пополнить</button>
+                        <button type="button" onclick="addBalanceCustom()" style="padding: 8px 15px; background: #417690; color: white; border: none; border-radius: 3px; cursor: pointer; font-weight: bold; transition: all 0.2s;">Пополнить</button>
                     </div>
                 </div>
                 <p style="margin-top: 15px; font-size: 12px; color: #666; border-top: 1px solid #dee2e6; padding-top: 10px;">
@@ -186,19 +311,20 @@ class UserAdmin(BaseUserAdmin):
         if not payments.exists():
             return format_html('<p style="color: #666;">Нет операций с балансом</p>')
         
-        history_html = '<table style="width: 100%; border-collapse: collapse;">'
-        history_html += '<tr style="background: #f0f0f0;"><th style="padding: 5px; border: 1px solid #ddd;">Дата</th><th style="padding: 5px; border: 1px solid #ddd;">Тариф</th><th style="padding: 5px; border: 1px solid #ddd;">Сумма</th><th style="padding: 5px; border: 1px solid #ddd;">Статус</th></tr>'
+        history_html = '<table style="width: 100%; border-collapse: collapse; margin-top: 10px;">'
+        history_html += '<thead><tr style="background: #f0f0f0;"><th style="padding: 8px; border: 1px solid #ddd; text-align: left;">Дата</th><th style="padding: 8px; border: 1px solid #ddd; text-align: left;">Тариф</th><th style="padding: 8px; border: 1px solid #ddd; text-align: left;">Сумма</th><th style="padding: 8px; border: 1px solid #ddd; text-align: left;">Статус</th></tr></thead><tbody>'
         
         for payment in payments:
-            status_color = {
-                'COMPLETED': 'green',
-                'PENDING': 'orange',
-                'FAILED': 'red',
-                'CANCELLED': 'gray'
-            }.get(payment.status, 'black')
+            status_colors = {
+                'COMPLETED': '#28a745',
+                'PENDING': '#ffc107',
+                'FAILED': '#dc3545',
+                'CANCELLED': '#6c757d'
+            }
+            status_color = status_colors.get(payment.status, '#000')
             
             history_html += format_html(
-                '<tr><td style="padding: 5px; border: 1px solid #ddd;">{}</td><td style="padding: 5px; border: 1px solid #ddd;">{}</td><td style="padding: 5px; border: 1px solid #ddd;">${:.2f}</td><td style="padding: 5px; border: 1px solid #ddd; color: {};">{}</td></tr>',
+                '<tr><td style="padding: 8px; border: 1px solid #ddd;">{}</td><td style="padding: 8px; border: 1px solid #ddd;">{}</td><td style="padding: 8px; border: 1px solid #ddd; font-weight: bold;">${:.2f}</td><td style="padding: 8px; border: 1px solid #ddd; color: {}; font-weight: bold;">{}</td></tr>',
                 payment.created_at.strftime('%d.%m.%Y %H:%M'),
                 payment.tariff.name if payment.tariff else '-',
                 payment.amount,
@@ -206,7 +332,7 @@ class UserAdmin(BaseUserAdmin):
                 payment.get_status_display()
             )
         
-        history_html += '</table>'
+        history_html += '</tbody></table>'
         return format_html(history_html)
     get_balance_history.short_description = "История платежей"
     

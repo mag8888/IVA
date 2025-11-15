@@ -1,203 +1,241 @@
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Equilibrium MLM - Админ-панель</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <style>
-        .stat-card {
-            border-radius: 10px;
-            padding: 20px;
-            margin-bottom: 20px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        .stat-card h3 {
-            margin: 0;
-            font-size: 2rem;
-            font-weight: bold;
-        }
-        .stat-card p {
-            margin: 5px 0 0 0;
-            color: #666;
-        }
-    </style>
-</head>
-<body>
-    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
-        <div class="container-fluid">
-            <a class="navbar-brand" href="/">
-                <i class="fas fa-chart-line"></i> Equilibrium MLM
-            </a>
-            <div class="navbar-nav ms-auto">
-                <a class="nav-link" href="/">Дашборд</a>
-                <a class="nav-link" href="/structure/">Структура</a>
-                <a class="nav-link" href="/queue/">Очередь</a>
-                <a class="nav-link" href="/admin/">Django Admin</a>
-            </div>
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block extrastyle %}
+{{ block.super }}
+<style>
+    .dashboard-stats {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 20px;
+        margin-bottom: 30px;
+    }
+    .stat-card {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        padding: 20px;
+        border-radius: 10px;
+        color: white;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        transition: transform 0.2s;
+    }
+    .stat-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+    }
+    .stat-card h3 {
+        margin: 0 0 10px 0;
+        font-size: 14px;
+        opacity: 0.9;
+    }
+    .stat-card .value {
+        font-size: 32px;
+        font-weight: bold;
+        margin: 0;
+    }
+    .stat-card.green { background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); }
+    .stat-card.blue { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+    .stat-card.orange { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); }
+    .stat-card.purple { background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); }
+    
+    .dashboard-section {
+        background: white;
+        padding: 20px;
+        border-radius: 10px;
+        margin-bottom: 20px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+    .dashboard-section h2 {
+        margin-top: 0;
+        color: #417690;
+        border-bottom: 2px solid #417690;
+        padding-bottom: 10px;
+    }
+    .table-responsive {
+        overflow-x: auto;
+    }
+    table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+    table th, table td {
+        padding: 10px;
+        text-align: left;
+        border-bottom: 1px solid #ddd;
+    }
+    table th {
+        background: #f8f9fa;
+        font-weight: bold;
+        color: #417690;
+    }
+    table tr:hover {
+        background: #f8f9fa;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<h1>📊 Dashboard - Статистика системы</h1>
+
+<div class="dashboard-stats">
+    <div class="stat-card blue">
+        <h3>👥 Всего пользователей</h3>
+        <p class="value">{{ total_users }}</p>
+    </div>
+    <div class="stat-card green">
+        <h3>✅ Активных пользователей</h3>
+        <p class="value">{{ active_users }}</p>
+    </div>
+    <div class="stat-card purple">
+        <h3>💳 Пользователей с оплатой</h3>
+        <p class="value">{{ users_with_payments }}</p>
+    </div>
+    <div class="stat-card orange">
+        <h3>💰 Общий доход</h3>
+        <p class="value">${{ total_revenue|floatformat:2 }}</p>
+    </div>
+</div>
+
+<div class="dashboard-stats">
+    <div class="stat-card blue">
+        <h3>📝 Всего платежей</h3>
+        <p class="value">{{ total_payments }}</p>
+    </div>
+    <div class="stat-card green">
+        <h3>✅ Завершено</h3>
+        <p class="value">{{ completed_payments }}</p>
+    </div>
+    <div class="stat-card orange">
+        <h3>⏳ Ожидает</h3>
+        <p class="value">{{ pending_payments }}</p>
+    </div>
+    <div class="stat-card purple">
+        <h3>🎁 Всего бонусов</h3>
+        <p class="value">${{ total_bonuses|floatformat:2 }}</p>
+    </div>
+</div>
+
+<div class="dashboard-stats">
+    <div class="stat-card green">
+        <h3>💚 Зеленые бонусы</h3>
+        <p class="value">${{ green_bonuses|floatformat:2 }}</p>
+    </div>
+    <div class="stat-card orange">
+        <h3>💛 Желтые бонусы</h3>
+        <p class="value">${{ yellow_bonuses|floatformat:2 }}</p>
+    </div>
+    <div class="stat-card blue">
+        <h3>🌳 Узлов структуры</h3>
+        <p class="value">{{ total_nodes }}</p>
+    </div>
+    <div class="stat-card purple">
+        <h3>📈 За 30 дней</h3>
+        <p class="value">{{ recent_users }} пользователей</p>
+    </div>
+</div>
+
+<div class="dashboard-section">
+    <h2>📊 Статистика по тарифам</h2>
+    <div class="table-responsive">
+        <table>
+            <thead>
+                <tr>
+                    <th>Тариф</th>
+                    <th>Платежей</th>
+                    <th>Общая сумма</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for stat in tariffs_stats %}
+                <tr>
+                    <td><strong>{{ stat.tariff.name }}</strong> (${{ stat.tariff.entry_amount|floatformat:2 }})</td>
+                    <td>{{ stat.count }}</td>
+                    <td style="color: #28a745; font-weight: bold;">${{ stat.total|floatformat:2 }}</td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="3" style="text-align: center; color: #666;">Нет данных</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="dashboard-section">
+    <h2>👑 Топ пользователей по балансу</h2>
+    <div class="table-responsive">
+        <table>
+            <thead>
+                <tr>
+                    <th>Пользователь</th>
+                    <th>Email</th>
+                    <th>Баланс</th>
+                    <th>Статус</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for user in top_users_balance %}
+                <tr>
+                    <td><a href="{% url 'admin:core_user_change' user.id %}">{{ user.username }}</a></td>
+                    <td>{{ user.email }}</td>
+                    <td style="color: #28a745; font-weight: bold;">${{ user.balance|floatformat:2 }}</td>
+                    <td>{{ user.get_status_display }}</td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="4" style="text-align: center; color: #666;">Нет данных</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="dashboard-section">
+    <h2>🎁 Топ пользователей по бонусам</h2>
+    <div class="table-responsive">
+        <table>
+            <thead>
+                <tr>
+                    <th>Пользователь</th>
+                    <th>Email</th>
+                    <th>Всего бонусов</th>
+                    <th>Статус</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for user in top_users_bonuses %}
+                <tr>
+                    <td><a href="{% url 'admin:core_user_change' user.id %}">{{ user.username }}</a></td>
+                    <td>{{ user.email }}</td>
+                    <td style="color: #417690; font-weight: bold;">${{ user.total_bonuses|floatformat:2 }}</td>
+                    <td>{{ user.get_status_display }}</td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="4" style="text-align: center; color: #666;">Нет данных</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="dashboard-section">
+    <h2>📈 Статистика за последние 30 дней</h2>
+    <div class="dashboard-stats">
+        <div class="stat-card blue">
+            <h3>Новых пользователей</h3>
+            <p class="value">{{ recent_users }}</p>
         </div>
-    </nav>
-
-    <div class="container-fluid mt-4">
-        <h1 class="mb-4">Дашборд</h1>
-
-        <!-- Статистика пользователей -->
-        <div class="row mb-4">
-            <div class="col-md-3">
-                <div class="stat-card bg-primary text-white">
-                    <h3>{{ stats.users.total }}</h3>
-                    <p>Всего пользователей</p>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="stat-card bg-warning text-white">
-                    <h3>{{ stats.users.participants }}</h3>
-                    <p>Участников</p>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="stat-card bg-success text-white">
-                    <h3>{{ stats.users.partners }}</h3>
-                    <p>Партнеров</p>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="stat-card bg-info text-white">
-                    <h3>{{ stats.users.admins }}</h3>
-                    <p>Администраторов</p>
-                </div>
-            </div>
+        <div class="stat-card green">
+            <h3>Новых платежей</h3>
+            <p class="value">{{ recent_payments }}</p>
         </div>
-
-        <!-- Статистика структуры и платежей -->
-        <div class="row mb-4">
-            <div class="col-md-4">
-                <div class="stat-card bg-secondary text-white">
-                    <h3>{{ stats.structure.total_nodes }}</h3>
-                    <p>Узлов в структуре</p>
-                </div>
-            </div>
-            <div class="col-md-4">
-                <div class="stat-card bg-danger text-white">
-                    <h3>{{ stats.payments.pending }}</h3>
-                    <p>Ожидающих платежей</p>
-                </div>
-            </div>
-            <div class="col-md-4">
-                <div class="stat-card bg-success text-white">
-                    <h3>{{ stats.payments.completed }}</h3>
-                    <p>Завершенных платежей</p>
-                </div>
-            </div>
-        </div>
-
-        <!-- Статистика бонусов (из БД) -->
-        <div class="row mb-4">
-            <div class="col-md-4">
-                <div class="stat-card bg-success text-white">
-                    <h3>${{ stats.bonuses.total|floatformat:2 }}</h3>
-                    <p>Всего бонусов</p>
-                </div>
-            </div>
-            <div class="col-md-4">
-                <div class="stat-card bg-success text-white" style="background-color: #28a745 !important;">
-                    <h3>${{ stats.bonuses.green|floatformat:2 }}</h3>
-                    <p>Зеленых бонусов</p>
-                </div>
-            </div>
-            <div class="col-md-4">
-                <div class="stat-card bg-warning text-white">
-                    <h3>${{ stats.bonuses.yellow|floatformat:2 }}</h3>
-                    <p>Желтых бонусов</p>
-                </div>
-            </div>
-        </div>
-
-        <!-- Последние пользователи -->
-        <div class="row">
-            <div class="col-md-6">
-                <div class="card">
-                    <div class="card-header">
-                        <h5><i class="fas fa-users"></i> Последние пользователи</h5>
-                    </div>
-                    <div class="card-body">
-                        <table class="table table-striped">
-                            <thead>
-                                <tr>
-                                    <th>Username</th>
-                                    <th>Email</th>
-                                    <th>Статус</th>
-                                    <th>Дата</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for user in recent_users %}
-                                <tr>
-                                    <td>{{ user.username }}</td>
-                                    <td>{{ user.email }}</td>
-                                    <td>
-                                        <span class="badge bg-{% if user.status == 'PARTNER' %}success{% elif user.status == 'PARTICIPANT' %}warning{% else %}info{% endif %}">
-                                            {{ user.get_status_display }}
-                                        </span>
-                                    </td>
-                                    <td>{{ user.date_joined|date:"d.m.Y H:i" }}</td>
-                                </tr>
-                                {% empty %}
-                                <tr>
-                                    <td colspan="4" class="text-center">Нет пользователей</td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Последние бонусы (из БД) -->
-            <div class="col-md-6">
-                <div class="card">
-                    <div class="card-header">
-                        <h5><i class="fas fa-gift"></i> Последние бонусы</h5>
-                    </div>
-                    <div class="card-body">
-                        <table class="table table-striped">
-                            <thead>
-                                <tr>
-                                    <th>Получатель</th>
-                                    <th>Источник</th>
-                                    <th>Тип</th>
-                                    <th>Сумма</th>
-                                    <th>Дата</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for bonus in recent_bonuses %}
-                                <tr>
-                                    <td>{{ bonus.user.username }}</td>
-                                    <td>{{ bonus.source_user.username }}</td>
-                                    <td>
-                                        <span class="badge bg-{% if bonus.bonus_type == 'GREEN' %}success{% else %}warning{% endif %}">
-                                            {{ bonus.get_bonus_type_display }}
-                                        </span>
-                                    </td>
-                                    <td>${{ bonus.amount|floatformat:2 }}</td>
-                                    <td>{{ bonus.created_at|date:"d.m.Y H:i" }}</td>
-                                </tr>
-                                {% empty %}
-                                <tr>
-                                    <td colspan="5" class="text-center">Нет бонусов</td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
+        <div class="stat-card purple">
+            <h3>Доход за период</h3>
+            <p class="value">${{ recent_revenue|floatformat:2 }}</p>
         </div>
     </div>
-
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-</body>
-</html>
-
+</div>
+{% endblock %}
