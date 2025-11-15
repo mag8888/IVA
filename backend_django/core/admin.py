@@ -48,34 +48,56 @@ class UserAdmin(BaseUserAdmin):
     
     def get_invited_count(self, obj):
         """Количество приглашенных пользователей."""
-        total = obj.invited_users.count()
-        with_payment = obj.invited_users.filter(
-            payments__status=Payment.PaymentStatus.COMPLETED
-        ).distinct().count()
-        
-        if total > 0:
-            return format_html(
-                '<span style="color: #417690; font-weight: bold;">{}/{}</span>',
-                with_payment,
-                total
-            )
-        return "0/0"
+        try:
+            if not obj.pk:
+                return "0/0"
+            total = obj.invited_users.count()
+            with_payment = obj.invited_users.filter(
+                payments__status=Payment.PaymentStatus.COMPLETED
+            ).distinct().count()
+            
+            if total > 0:
+                return format_html(
+                    '<span style="color: #417690; font-weight: bold;">{}/{}</span>',
+                    with_payment,
+                    total
+                )
+            return "0/0"
+        except Exception as e:
+            return "0/0"
     get_invited_count.short_description = "Приглашено"
     
     def get_total_bonuses(self, obj):
         """Получить общую сумму бонусов пользователя."""
-        total = Bonus.objects.filter(user=obj).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
-        green = Bonus.objects.filter(user=obj, bonus_type=Bonus.BonusType.GREEN).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
-        yellow = Bonus.objects.filter(user=obj, bonus_type=Bonus.BonusType.YELLOW).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
-        
-        return format_html(
-            '<div style="line-height: 1.4;">'
-            '<span style="color: #28a745;">💚 ${:.2f}</span><br>'
-            '<span style="color: #ffc107;">💛 ${:.2f}</span><br>'
-            '<strong>💰 ${:.2f}</strong>'
-            '</div>',
-            green, yellow, total
-        )
+        try:
+            if not obj.pk:
+                return format_html(
+                    '<div style="line-height: 1.4;">'
+                    '<span style="color: #28a745;">💚 $0.00</span><br>'
+                    '<span style="color: #ffc107;">💛 $0.00</span><br>'
+                    '<strong>💰 $0.00</strong>'
+                    '</div>'
+                )
+            total = Bonus.objects.filter(user=obj).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+            green = Bonus.objects.filter(user=obj, bonus_type=Bonus.BonusType.GREEN).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+            yellow = Bonus.objects.filter(user=obj, bonus_type=Bonus.BonusType.YELLOW).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+            
+            return format_html(
+                '<div style="line-height: 1.4;">'
+                '<span style="color: #28a745;">💚 ${:.2f}</span><br>'
+                '<span style="color: #ffc107;">💛 ${:.2f}</span><br>'
+                '<strong>💰 ${:.2f}</strong>'
+                '</div>',
+                green, yellow, total
+            )
+        except Exception as e:
+            return format_html(
+                '<div style="line-height: 1.4;">'
+                '<span style="color: #28a745;">💚 $0.00</span><br>'
+                '<span style="color: #ffc107;">💛 $0.00</span><br>'
+                '<strong>💰 $0.00</strong>'
+                '</div>'
+            )
     get_total_bonuses.short_description = "Бонусы"
     
     def get_balance_display(self, obj):
