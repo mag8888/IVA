@@ -407,11 +407,35 @@ fieldset.module .form-row:last-child {
 /* ===== LOGIN PAGE ===== */
 .login {
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background-attachment: fixed;
     min-height: 100vh;
     display: flex;
     justify-content: center;
     align-items: center;
     padding: 2rem;
+    position: relative;
+    overflow: hidden;
+}
+
+.login::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(circle, rgba(255, 255, 255, 0.1) 0%, transparent 70%);
+    animation: rotate 20s linear infinite;
+    z-index: 0;
+}
+
+@keyframes rotate {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
 }
 
 .login #header {
@@ -419,6 +443,8 @@ fieldset.module .form-row:last-child {
     box-shadow: none;
     padding: 0;
     margin-bottom: 2rem;
+    position: relative;
+    z-index: 1;
 }
 
 .login #content {
@@ -437,15 +463,48 @@ fieldset.module .form-row:last-child {
 .login #site-name {
     text-align: center;
     margin-bottom: 2rem;
+    position: relative;
+    z-index: 1;
 }
 
 .login .form-row {
     margin-bottom: 1.5rem;
+    position: relative;
+    z-index: 1;
+}
+
+.login .form-row label {
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 0.5rem;
+    display: block;
+    font-size: 0.875rem;
+}
+
+.login .form-row input[type="text"],
+.login .form-row input[type="password"] {
+    width: 100%;
+    padding: 0.875rem;
+    border: 2px solid var(--border-color);
+    border-radius: var(--radius-md);
+    font-size: 0.875rem;
+    transition: all 0.3s ease;
+    background: white;
+    box-sizing: border-box;
+}
+
+.login .form-row input[type="text"]:focus,
+.login .form-row input[type="password"]:focus {
+    outline: none;
+    border-color: #667eea;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
 }
 
 .login .submit-row {
     text-align: center;
     margin-top: 2rem;
+    position: relative;
+    z-index: 1;
 }
 
 .login .submit-row input {
@@ -480,66 +539,16 @@ fieldset.module .form-row:last-child {
     margin-bottom: 1.5rem;
     font-weight: 500;
     box-shadow: var(--shadow-md);
+    position: relative;
+    z-index: 1;
 }
 
 .login .help {
     color: var(--text-secondary);
     font-size: 0.875rem;
     margin-top: 0.5rem;
-}
-
-.login {
     position: relative;
-    overflow: hidden;
-    background-attachment: fixed;
-}
-
-.login::before {
-    content: '';
-    position: absolute;
-    top: -50%;
-    left: -50%;
-    width: 200%;
-    height: 200%;
-    background: radial-gradient(circle, rgba(255, 255, 255, 0.1) 0%, transparent 70%);
-    animation: rotate 20s linear infinite;
-    z-index: 0;
-}
-
-@keyframes rotate {
-    from {
-        transform: rotate(0deg);
-    }
-    to {
-        transform: rotate(360deg);
-    }
-}
-
-.login .form-row input[type="text"],
-.login .form-row input[type="password"] {
-    width: 100%;
-    padding: 0.875rem;
-    border: 2px solid var(--border-color);
-    border-radius: var(--radius-md);
-    font-size: 0.875rem;
-    transition: all 0.3s ease;
-    background: white;
-    box-sizing: border-box;
-}
-
-.login .form-row input[type="text"]:focus,
-.login .form-row input[type="password"]:focus {
-    outline: none;
-    border-color: #667eea;
-    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-}
-
-.login .form-row label {
-    font-weight: 600;
-    color: var(--text-primary);
-    margin-bottom: 0.5rem;
-    display: block;
-    font-size: 0.875rem;
+    z-index: 1;
 }
 
 /* ===== DASHBOARD ===== */
