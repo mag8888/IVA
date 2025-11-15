@@ -32,6 +32,19 @@ timeout 300 python manage.py collectstatic --noinput || echo "⚠️  Static fil
 echo "🔄 Applying migrations..."
 timeout 300 python manage.py migrate --noinput || echo "⚠️  Migrations timeout or failed"
 
+# Создание администратора (если указаны переменные окружения)
+if [ -n "$ADMIN_PASSWORD" ]; then
+    echo "👤 Creating/updating admin user..."
+    ADMIN_USERNAME=${ADMIN_USERNAME:-admin}
+    ADMIN_EMAIL=${ADMIN_EMAIL:-admin@equilibrium.com}
+    timeout 60 python manage.py init_admin \
+        --username "$ADMIN_USERNAME" \
+        --email "$ADMIN_EMAIL" \
+        --password "$ADMIN_PASSWORD" || echo "⚠️  Admin creation timeout or failed"
+else
+    echo "ℹ️  ADMIN_PASSWORD not set, skipping admin creation"
+fi
+
 # Запуск Gunicorn
 echo "🌐 Starting Gunicorn..."
 # Устанавливаем переменную для главного процесса
