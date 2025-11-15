@@ -159,6 +159,33 @@ TELEGRAM_WEBHOOK_URL = env('TELEGRAM_WEBHOOK_URL', default='')
 # Railway Settings
 RAILWAY_PUBLIC_DOMAIN = env('RAILWAY_PUBLIC_DOMAIN', default='')
 
+# CSRF Settings (для работы с Railway и админкой)
+CSRF_TRUSTED_ORIGINS = env.list(
+    'CSRF_TRUSTED_ORIGINS',
+    default=[
+        'https://iva-production-4400.up.railway.app',
+        'https://iva.up.railway.app',
+        'http://localhost:8000',
+        'http://localhost:3000',
+    ]
+)
+# Если указан RAILWAY_PUBLIC_DOMAIN, добавляем его
+if RAILWAY_PUBLIC_DOMAIN:
+    railway_url = f'https://{RAILWAY_PUBLIC_DOMAIN}'
+    if railway_url not in CSRF_TRUSTED_ORIGINS:
+        CSRF_TRUSTED_ORIGINS.append(railway_url)
+
+# Session Settings (для работы с админкой)
+# На Railway используется прокси, поэтому проверяем через переменную окружения
+SESSION_COOKIE_SECURE = env.bool('SESSION_COOKIE_SECURE', default=True)  # True для HTTPS
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = 'Lax'
+CSRF_COOKIE_SECURE = env.bool('CSRF_COOKIE_SECURE', default=True)  # True для HTTPS
+CSRF_COOKIE_HTTPONLY = False  # Должно быть False для JavaScript доступа
+CSRF_COOKIE_SAMESITE = 'Lax'
+# Используем заголовок X-Forwarded-Proto для определения HTTPS
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
 # CORS Settings (для работы с фронтендом)
 CORS_ALLOWED_ORIGINS = env.list(
     'CORS_ALLOWED_ORIGINS',
