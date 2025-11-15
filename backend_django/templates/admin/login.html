@@ -6,31 +6,28 @@
 <link rel="stylesheet" type="text/css" href="{% static 'admin/css/custom_admin.css' %}">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 {% endblock %}
 
 {% block branding %}
 <div class="login-branding">
-    <div class="login-logo-container">
-        <div class="logo-wrapper">
-            <svg width="72" height="72" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" class="logo-svg">
-                <path d="M16 2L2 10L16 18L30 10L16 2Z" fill="url(#gradient1)"/>
-                <path d="M2 10L16 18L30 10L16 30L2 10Z" fill="url(#gradient2)"/>
-                <defs>
-                    <linearGradient id="gradient1" x1="0%" y1="0%" x2="100%" y2="0%">
-                        <stop offset="0%" style="stop-color:#667eea;stop-opacity:1" />
-                        <stop offset="100%" style="stop-color:#764ba2;stop-opacity:1" />
-                    </linearGradient>
-                    <linearGradient id="gradient2" x1="0%" y1="0%" x2="100%" y2="100%">
-                        <stop offset="0%" style="stop-color:#f093fb;stop-opacity:1" />
-                        <stop offset="100%" style="stop-color:#f5576c;stop-opacity:1" />
-                    </linearGradient>
-                </defs>
-            </svg>
-        </div>
-        <h1 class="login-title">Equilibrium MLM</h1>
-        <p class="login-subtitle">Панель управления</p>
+    <div class="logo-container">
+        <svg width="64" height="64" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" class="logo">
+            <path d="M16 2L2 10L16 18L30 10L16 2Z" fill="url(#gradient1)"/>
+            <path d="M2 10L16 18L30 10L16 30L2 10Z" fill="url(#gradient2)"/>
+            <defs>
+                <linearGradient id="gradient1" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" style="stop-color:#667eea;stop-opacity:1" />
+                    <stop offset="100%" style="stop-color:#764ba2;stop-opacity:1" />
+                </linearGradient>
+                <linearGradient id="gradient2" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" style="stop-color:#f093fb;stop-opacity:1" />
+                    <stop offset="100%" style="stop-color:#f5576c;stop-opacity:1" />
+                </linearGradient>
+            </defs>
+        </svg>
     </div>
+    <h1 class="login-title">Equilibrium MLM</h1>
+    <p class="login-subtitle">Панель управления</p>
 </div>
 {% endblock %}
