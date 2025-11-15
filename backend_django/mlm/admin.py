@@ -31,10 +31,15 @@ class TariffAdmin(admin.ModelAdmin):
     
     def get_entry_amount_display(self, obj):
         """Отображение суммы вступительного взноса."""
-        return format_html(
-            '<span style="color: #417690; font-weight: bold; font-size: 1.1em;">${:.2f}</span>',
-            obj.entry_amount
-        )
+        if not obj.pk:
+            return "$0.00"
+        try:
+            return format_html(
+                '<span style="color: #417690; font-weight: bold; font-size: 1.1em;">${:.2f}</span>',
+                obj.entry_amount
+            )
+        except Exception:
+            return "$0.00"
     get_entry_amount_display.short_description = "Сумма"
     get_entry_amount_display.admin_order_field = 'entry_amount'
     
@@ -43,31 +48,34 @@ class TariffAdmin(admin.ModelAdmin):
         if not obj.pk:
             return "Сначала сохраните тариф"
         
-        from billing.models import Payment
-        from django.db.models import Sum, Count
-        
-        total_payments = Payment.objects.filter(tariff=obj).count()
-        completed_payments = Payment.objects.filter(tariff=obj, status=Payment.PaymentStatus.COMPLETED).count()
-        total_amount = Payment.objects.filter(
-            tariff=obj,
-            status=Payment.PaymentStatus.COMPLETED
-        ).aggregate(total=Sum('amount'))['total'] or 0
-        
-        users_count = StructureNode.objects.filter(tariff=obj).count()
-        
-        return format_html(
-            '<div style="padding: 10px; background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 5px;">'
-            '<p><strong>📊 Статистика тарифа:</strong></p>'
-            '<p>Всего платежей: <strong>{}</strong></p>'
-            '<p>Завершено: <strong style="color: #28a745;">{}</strong></p>'
-            '<p>Общая сумма: <strong style="color: #417690;">${:.2f}</strong></p>'
-            '<p>Пользователей с тарифом: <strong>{}</strong></p>'
-            '</div>',
-            total_payments,
-            completed_payments,
-            total_amount,
-            users_count
-        )
+        try:
+            from billing.models import Payment
+            from django.db.models import Sum, Count
+            
+            total_payments = Payment.objects.filter(tariff=obj).count()
+            completed_payments = Payment.objects.filter(tariff=obj, status=Payment.PaymentStatus.COMPLETED).count()
+            total_amount = Payment.objects.filter(
+                tariff=obj,
+                status=Payment.PaymentStatus.COMPLETED
+            ).aggregate(total=Sum('amount'))['total'] or 0
+            
+            users_count = StructureNode.objects.filter(tariff=obj).count()
+            
+            return format_html(
+                '<div style="padding: 10px; background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 5px;">'
+                '<p><strong>📊 Статистика тарифа:</strong></p>'
+                '<p>Всего платежей: <strong>{}</strong></p>'
+                '<p>Завершено: <strong style="color: #28a745;">{}</strong></p>'
+                '<p>Общая сумма: <strong style="color: #417690;">${:.2f}</strong></p>'
+                '<p>Пользователей с тарифом: <strong>{}</strong></p>'
+                '</div>',
+                total_payments,
+                completed_payments,
+                total_amount,
+                users_count
+            )
+        except Exception:
+            return "Ошибка загрузки статистики"
     get_statistics.short_description = "📊 Статистика"
 
 
@@ -96,35 +104,46 @@ class StructureNodeAdmin(admin.ModelAdmin):
     
     def get_user_link(self, obj):
         """Ссылка на пользователя."""
-        return format_html(
-            '<a href="{}">{}</a>',
-            reverse('admin:core_user_change', args=[obj.user.id]),
-            obj.user.username
-        )
+        if not obj.pk or not obj.user:
+            return "-"
+        try:
+            return format_html(
+                '<a href="{}">{}</a>',
+                reverse('admin:core_user_change', args=[obj.user.id]),
+                obj.user.username
+            )
+        except Exception:
+            return obj.user.username if obj.user else "-"
     get_user_link.short_description = "Пользователь"
     get_user_link.admin_order_field = 'user__username'
     
     def get_parent_link(self, obj):
         """Ссылка на родителя."""
-        if obj.parent:
+        if not obj.pk or not obj.parent:
+            return "-"
+        try:
             return format_html(
                 '<a href="{}">{}</a>',
                 reverse('admin:core_user_change', args=[obj.parent.id]),
                 obj.parent.username
             )
-        return "-"
+        except Exception:
+            return obj.parent.username if obj.parent else "-"
     get_parent_link.short_description = "Родитель"
     get_parent_link.admin_order_field = 'parent__username'
     
     def get_tariff_link(self, obj):
         """Ссылка на тариф."""
-        if obj.tariff:
+        if not obj.pk or not obj.tariff:
+            return "-"
+        try:
             return format_html(
                 '<a href="{}">{}</a>',
                 reverse('admin:mlm_tariff_change', args=[obj.tariff.id]),
                 obj.tariff.name
             )
-        return "-"
+        except Exception:
+            return obj.tariff.name if obj.tariff else "-"
     get_tariff_link.short_description = "Тариф"
     get_tariff_link.admin_order_field = 'tariff__name'
     
@@ -133,28 +152,34 @@ class StructureNodeAdmin(admin.ModelAdmin):
         if not obj.pk:
             return "Сначала сохраните узел"
         
-        children = obj.children.all()
-        if not children.exists():
-            return format_html('<p style="color: #6c757d;">Нет детей в структуре</p>')
-        
-        children_html = '<ul style="margin: 5px 0; padding-left: 20px;">'
-        for child in children:
-            children_html += format_html(
-                '<li><a href="{}">{}</a> (Позиция {})</li>',
-                reverse('admin:core_user_change', args=[child.user.id]),
-                child.user.username,
-                child.position
+        try:
+            children = obj.children.all()
+            if not children.exists():
+                return format_html('<p style="color: #6c757d;">Нет детей в структуре</p>')
+            
+            children_items = []
+            for child in children:
+                try:
+                    url = reverse('admin:core_user_change', args=[child.user.id])
+                    children_items.append(
+                        f'<li><a href="{url}">{child.user.username}</a> (Позиция {child.position})</li>'
+                    )
+                except Exception:
+                    username = child.user.username if child.user else "N/A"
+                    children_items.append(f'<li>{username} (Позиция {child.position})</li>')
+            
+            children_html = '<ul style="margin: 5px 0; padding-left: 20px;">' + ''.join(children_items) + '</ul>'
+            
+            return format_html(
+                '<div style="padding: 10px; background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 5px;">'
+                '<p><strong>Дети ({})</strong></p>'
+                '{}'
+                '</div>',
+                children.count(),
+                format_html(children_html)
             )
-        children_html += '</ul>'
-        
-        return format_html(
-            '<div style="padding: 10px; background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 5px;">'
-            '<p><strong>Дети ({})</strong></p>'
-            '{}'
-            '</div>',
-            children.count(),
-            children_html
-        )
+        except Exception:
+            return "Ошибка загрузки информации о детях"
     get_children_info.short_description = "Дети в структуре"
     
     def get_structure_path(self, obj):
@@ -162,29 +187,32 @@ class StructureNodeAdmin(admin.ModelAdmin):
         if not obj.pk:
             return "Сначала сохраните узел"
         
-        path = []
-        current = obj
-        while current.parent:
-            parent_node = StructureNode.objects.filter(user=current.parent).first()
-            if parent_node:
-                path.insert(0, format_html(
-                    '<a href="{}">{}</a> (L{} P{})',
-                    reverse('admin:core_user_change', args=[current.parent.id]),
-                    current.parent.username,
-                    parent_node.level,
-                    parent_node.position
-                ))
-                current = parent_node
-            else:
-                break
-        
-        if path:
-            return format_html(
-                '<div style="padding: 10px; background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 5px;">'
-                '<p><strong>Путь от корня:</strong></p>'
-                '<p>{}</p>'
-                '</div>',
-                ' → '.join(path)
-            )
-        return format_html('<p style="color: #6c757d;">Корневой пользователь</p>')
+        try:
+            path_items = []
+            current = obj
+            while current.parent:
+                parent_node = StructureNode.objects.filter(user=current.parent).first()
+                if parent_node:
+                    try:
+                        url = reverse('admin:core_user_change', args=[current.parent.id])
+                        path_items.insert(0, f'<a href="{url}">{current.parent.username}</a> (L{parent_node.level} P{parent_node.position})')
+                    except Exception:
+                        username = current.parent.username if current.parent else "N/A"
+                        path_items.insert(0, f'{username} (L{parent_node.level} P{parent_node.position})')
+                    current = parent_node
+                else:
+                    break
+            
+            if path_items:
+                path_html = ' → '.join(path_items)
+                return format_html(
+                    '<div style="padding: 10px; background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 5px;">'
+                    '<p><strong>Путь от корня:</strong></p>'
+                    '<p>{}</p>'
+                    '</div>',
+                    format_html(path_html)
+                )
+            return format_html('<p style="color: #6c757d;">Корневой пользователь</p>')
+        except Exception:
+            return "Ошибка загрузки пути в структуре"
     get_structure_path.short_description = "Путь в структуре"
