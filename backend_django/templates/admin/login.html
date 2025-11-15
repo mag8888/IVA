@@ -10,25 +10,26 @@
 {% endblock %}
 
 {% block branding %}
-<div style="text-align: center; margin-bottom: 2rem;">
-    <svg width="64" height="64" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" style="display: inline-block; margin-bottom: 1rem;">
-        <path d="M16 2L2 10L16 18L30 10L16 2Z" fill="url(#gradient1)"/>
-        <path d="M2 10L16 18L30 10L16 30L2 10Z" fill="url(#gradient2)"/>
-        <defs>
-            <linearGradient id="gradient1" x1="0%" y1="0%" x2="100%" y2="0%">
-                <stop offset="0%" style="stop-color:#667eea;stop-opacity:1" />
-                <stop offset="100%" style="stop-color:#764ba2;stop-opacity:1" />
-            </linearGradient>
-            <linearGradient id="gradient2" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" style="stop-color:#f093fb;stop-opacity:1" />
-                <stop offset="100%" style="stop-color:#f5576c;stop-opacity:1" />
-            </linearGradient>
-        </defs>
-    </svg>
-    <h1 style="font-size: 2rem; font-weight: 700; margin: 0; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">
-        Equilibrium MLM
-    </h1>
-    <p style="color: #64748b; margin-top: 0.5rem; font-size: 0.875rem;">Панель управления</p>
+<div class="login-branding">
+    <div class="login-logo-wrapper">
+        <svg width="80" height="80" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" class="login-logo">
+            <path d="M16 2L2 10L16 18L30 10L16 2Z" fill="url(#gradient1)"/>
+            <path d="M2 10L16 18L30 10L16 30L2 10Z" fill="url(#gradient2)"/>
+            <defs>
+                <linearGradient id="gradient1" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" style="stop-color:#667eea;stop-opacity:1" />
+                    <stop offset="100%" style="stop-color:#764ba2;stop-opacity:1" />
+                </linearGradient>
+                <linearGradient id="gradient2" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" style="stop-color:#f093fb;stop-opacity:1" />
+                    <stop offset="100%" style="stop-color:#f5576c;stop-opacity:1" />
+                </linearGradient>
+            </defs>
+        </svg>
+        <div class="login-logo-glow"></div>
+    </div>
+    <h1 class="login-title">Equilibrium MLM</h1>
+    <p class="login-subtitle">Панель управления</p>
 </div>
 {% endblock %}
 
