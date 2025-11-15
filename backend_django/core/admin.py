@@ -36,13 +36,18 @@ class UserAdmin(BaseUserAdmin):
     
     def get_invited_by(self, obj):
         """Отображение партнера с ссылкой на него."""
-        if obj.invited_by:
-            return format_html(
-                '<a href="{}">{}</a>',
-                reverse('admin:core_user_change', args=[obj.invited_by.id]),
-                obj.invited_by.username
-            )
-        return "-"
+        try:
+            if not obj.pk:
+                return "-"
+            if obj.invited_by:
+                return format_html(
+                    '<a href="{}">{}</a>',
+                    reverse('admin:core_user_change', args=[obj.invited_by.id]),
+                    obj.invited_by.username
+                )
+            return "-"
+        except Exception:
+            return "-"
     get_invited_by.short_description = "Партнер"
     get_invited_by.admin_order_field = 'invited_by'
     
@@ -102,22 +107,27 @@ class UserAdmin(BaseUserAdmin):
     
     def get_balance_display(self, obj):
         """Отображение баланса с цветом."""
-        balance = obj.balance or Decimal('0.00')
-        if balance > 0:
-            color = '#28a745'
-            icon = '💰'
-        elif balance < 0:
-            color = '#dc3545'
-            icon = '⚠️'
-        else:
-            color = '#6c757d'
-            icon = '💵'
-        return format_html(
-            '<span style="color: {}; font-weight: bold; font-size: 1.1em;">{} ${:.2f}</span>',
-            color,
-            icon,
-            balance
-        )
+        try:
+            balance = obj.balance or Decimal('0.00')
+            if balance > 0:
+                color = '#28a745'
+                icon = '💰'
+            elif balance < 0:
+                color = '#dc3545'
+                icon = '⚠️'
+            else:
+                color = '#6c757d'
+                icon = '💵'
+            return format_html(
+                '<span style="color: {}; font-weight: bold; font-size: 1.1em;">{} ${:.2f}</span>',
+                color,
+                icon,
+                balance
+            )
+        except Exception:
+            return format_html(
+                '<span style="color: #6c757d; font-weight: bold; font-size: 1.1em;">💵 $0.00</span>'
+            )
     get_balance_display.short_description = "Баланс"
     get_balance_display.admin_order_field = 'balance'
     
