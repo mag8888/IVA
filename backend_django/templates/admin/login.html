@@ -12,9 +12,9 @@
 
 {% block branding %}
 <div class="login-branding">
-    <div class="login-logo-wrapper">
-        <div class="login-logo-container">
-            <svg width="96" height="96" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" class="login-logo">
+    <div class="login-logo-container">
+        <div class="logo-wrapper">
+            <svg width="72" height="72" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" class="logo-svg">
                 <path d="M16 2L2 10L16 18L30 10L16 2Z" fill="url(#gradient1)"/>
                 <path d="M2 10L16 18L30 10L16 30L2 10Z" fill="url(#gradient2)"/>
                 <defs>
@@ -28,46 +28,9 @@
                     </linearGradient>
                 </defs>
             </svg>
-            <div class="login-logo-glow"></div>
-            <div class="login-logo-particles">
-                <div class="particle particle-1"></div>
-                <div class="particle particle-2"></div>
-                <div class="particle particle-3"></div>
-                <div class="particle particle-4"></div>
-            </div>
         </div>
+        <h1 class="login-title">Equilibrium MLM</h1>
+        <p class="login-subtitle">Панель управления</p>
     </div>
-    <h1 class="login-title">
-        <span class="title-main">Equilibrium</span>
-        <span class="title-accent">MLM</span>
-    </h1>
-    <p class="login-subtitle">
-        <i class="fas fa-shield-alt"></i>
-        Панель управления
-    </p>
-    <div class="login-features">
-        <div class="feature-item">
-            <i class="fas fa-lock"></i>
-            <span>Безопасный вход</span>
-        </div>
-        <div class="feature-item">
-            <i class="fas fa-chart-line"></i>
-            <span>Аналитика</span>
-        </div>
-        <div class="feature-item">
-            <i class="fas fa-users"></i>
-            <span>Управление</span>
-        </div>
-    </div>
-</div>
-{% endblock %}
-
-{% block content %}
-{{ block.super }}
-<div class="login-footer">
-    <p class="footer-text">
-        <i class="fas fa-info-circle"></i>
-        Защищено современными технологиями безопасности
-    </p>
 </div>
 {% endblock %}
