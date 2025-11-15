@@ -307,25 +307,41 @@ body {
 /* ===== FIELDSETS ===== */
 fieldset.module {
     background: var(--light-surface);
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-lg);
+    border: 1px solid rgba(226, 232, 240, 0.8);
+    border-radius: 16px;
     margin-bottom: 1.5rem;
     overflow: hidden;
+    box-shadow: 
+        0 4px 12px rgba(0, 0, 0, 0.08),
+        0 0 0 1px rgba(0, 0, 0, 0.02) inset;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+fieldset.module:hover {
+    box-shadow: 
+        0 8px 24px rgba(0, 0, 0, 0.12),
+        0 0 0 1px rgba(102, 126, 234, 0.1) inset;
+    transform: translateY(-2px);
 }
 
 fieldset.module h2 {
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     color: white;
-    padding: 1rem 1.5rem;
+    padding: 1.25rem 1.75rem;
     margin: 0;
     font-size: 1.125rem;
-    font-weight: 600;
+    font-weight: 700;
     cursor: pointer;
-    transition: all 0.3s ease;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    letter-spacing: 0.01em;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.2) inset;
 }
 
 fieldset.module h2:hover {
-    opacity: 0.9;
+    opacity: 0.95;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3) inset;
 }
 
 fieldset.module .form-row {
