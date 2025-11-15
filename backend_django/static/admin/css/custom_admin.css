@@ -666,23 +666,39 @@ fieldset.module .form-row:last-child {
 .login-logo-wrapper {
     position: relative;
     display: inline-block;
-    margin-bottom: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.login-logo-container {
+    position: relative;
+    display: inline-block;
 }
 
 .login-logo {
     display: inline-block;
-    filter: drop-shadow(0 10px 20px rgba(102, 126, 234, 0.3));
+    filter: drop-shadow(0 10px 30px rgba(102, 126, 234, 0.4));
     animation: logoFloat 3s ease-in-out infinite;
     position: relative;
-    z-index: 2;
+    z-index: 3;
+    transition: transform 0.3s ease;
+}
+
+.login-logo:hover {
+    transform: scale(1.1) rotate(5deg);
 }
 
 @keyframes logoFloat {
     0%, 100% {
-        transform: translateY(0) scale(1);
+        transform: translateY(0) scale(1) rotate(0deg);
+    }
+    25% {
+        transform: translateY(-8px) scale(1.03) rotate(-2deg);
     }
     50% {
-        transform: translateY(-10px) scale(1.05);
+        transform: translateY(-12px) scale(1.05) rotate(0deg);
+    }
+    75% {
+        transform: translateY(-8px) scale(1.03) rotate(2deg);
     }
 }
 
@@ -691,44 +707,224 @@ fieldset.module .form-row:last-child {
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    width: 120px;
-    height: 120px;
-    background: radial-gradient(circle, rgba(102, 126, 234, 0.4) 0%, transparent 70%);
+    width: 140px;
+    height: 140px;
+    background: radial-gradient(circle, rgba(102, 126, 234, 0.5) 0%, rgba(118, 75, 162, 0.3) 40%, transparent 70%);
     border-radius: 50%;
-    animation: glowPulse 2s ease-in-out infinite;
+    animation: glowPulse 2.5s ease-in-out infinite;
     z-index: 1;
 }
 
 @keyframes glowPulse {
     0%, 100% {
         transform: translate(-50%, -50%) scale(1);
+        opacity: 0.7;
+    }
+    50% {
+        transform: translate(-50%, -50%) scale(1.3);
+        opacity: 0.9;
+    }
+}
+
+.login-logo-particles {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 200px;
+    height: 200px;
+    z-index: 2;
+    pointer-events: none;
+}
+
+.login-logo-particles .particle {
+    position: absolute;
+    width: 6px;
+    height: 6px;
+    background: rgba(255, 255, 255, 0.8);
+    border-radius: 50%;
+    animation: particleFloat 4s ease-in-out infinite;
+}
+
+.particle-1 {
+    top: 10%;
+    left: 20%;
+    animation-delay: 0s;
+}
+
+.particle-2 {
+    top: 20%;
+    right: 15%;
+    animation-delay: 1s;
+}
+
+.particle-3 {
+    bottom: 15%;
+    left: 25%;
+    animation-delay: 2s;
+}
+
+.particle-4 {
+    bottom: 10%;
+    right: 20%;
+    animation-delay: 1.5s;
+}
+
+@keyframes particleFloat {
+    0%, 100% {
+        transform: translate(0, 0) scale(1);
         opacity: 0.6;
     }
     50% {
-        transform: translate(-50%, -50%) scale(1.2);
-        opacity: 0.8;
+        transform: translate(20px, -30px) scale(1.5);
+        opacity: 1;
     }
 }
 
 .login-title {
-    font-size: 2.5rem;
-    font-weight: 800;
+    font-size: 3rem;
+    font-weight: 900;
     margin: 0;
-    background: linear-gradient(135deg, #ffffff 0%, rgba(255, 255, 255, 0.9) 100%);
+    line-height: 1.1;
+    letter-spacing: -0.03em;
+    display: flex;
+    align-items: baseline;
+    justify-content: center;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.login-title .title-main {
+    background: linear-gradient(135deg, #ffffff 0%, rgba(255, 255, 255, 0.95) 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
-    text-shadow: 0 2px 10px rgba(102, 126, 234, 0.3);
-    letter-spacing: -0.02em;
-    line-height: 1.2;
+    text-shadow: 0 4px 20px rgba(102, 126, 234, 0.4);
+    animation: titleGlow 3s ease-in-out infinite;
+}
+
+.login-title .title-accent {
+    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    font-size: 0.7em;
+    font-weight: 800;
+    text-shadow: 0 4px 20px rgba(240, 147, 251, 0.4);
+    animation: titleGlow 3s ease-in-out infinite 0.5s;
+}
+
+@keyframes titleGlow {
+    0%, 100% {
+        filter: brightness(1);
+    }
+    50% {
+        filter: brightness(1.2);
+    }
 }
 
 .login-subtitle {
+    color: rgba(255, 255, 255, 0.95);
+    margin-top: 0.5rem;
+    font-size: 1.125rem;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    margin-bottom: 2rem;
+}
+
+.login-subtitle i {
+    font-size: 0.9em;
+    opacity: 0.9;
+    animation: iconPulse 2s ease-in-out infinite;
+}
+
+@keyframes iconPulse {
+    0%, 100% {
+        transform: scale(1);
+        opacity: 0.9;
+    }
+    50% {
+        transform: scale(1.1);
+        opacity: 1;
+    }
+}
+
+.login-features {
+    display: flex;
+    justify-content: center;
+    gap: 1.5rem;
+    margin-top: 2rem;
+    flex-wrap: wrap;
+}
+
+.feature-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 1rem 1.25rem;
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(10px);
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    min-width: 100px;
+}
+
+.feature-item:hover {
+    background: rgba(255, 255, 255, 0.15);
+    transform: translateY(-4px);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+}
+
+.feature-item i {
+    font-size: 1.5rem;
+    color: rgba(255, 255, 255, 0.95);
+    margin-bottom: 0.25rem;
+}
+
+.feature-item span {
+    font-size: 0.75rem;
+    font-weight: 600;
     color: rgba(255, 255, 255, 0.9);
-    margin-top: 0.75rem;
-    font-size: 1rem;
-    font-weight: 500;
+    text-align: center;
     letter-spacing: 0.02em;
+}
+
+.login-footer {
+    position: absolute;
+    bottom: 2rem;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1;
+    text-align: center;
+    width: 100%;
+    max-width: 440px;
+}
+
+.footer-text {
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 0.8125rem;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    margin: 0;
+    padding: 0.75rem 1.25rem;
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(10px);
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.footer-text i {
+    font-size: 0.9em;
+    opacity: 0.9;
 }
 
 .login #header {
@@ -783,18 +979,30 @@ fieldset.module .form-row:last-child {
 }
 
 .login .form-row label {
-    font-weight: 600;
+    font-weight: 700;
     color: var(--text-primary);
     margin-bottom: 0.75rem;
-    display: block;
-    font-size: 0.875rem;
-    letter-spacing: 0.01em;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.75rem;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+}
+
+.login .form-row label::before {
+    content: '';
+    width: 4px;
+    height: 16px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 2px;
+    display: inline-block;
 }
 
 .login .form-row input[type="text"],
 .login .form-row input[type="password"] {
     width: 100%;
-    padding: 1rem 1.25rem;
+    padding: 1.125rem 1.5rem 1.125rem 3rem;
     border: 2px solid #e2e8f0;
     border-radius: 12px;
     font-size: 0.9375rem;
@@ -804,6 +1012,41 @@ fieldset.module .form-row:last-child {
     font-weight: 500;
     color: var(--text-primary);
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
+    position: relative;
+}
+
+.login .form-row {
+    position: relative;
+}
+
+.login .form-row::after {
+    content: '';
+    position: absolute;
+    left: 1.25rem;
+    top: 3.5rem;
+    font-family: 'Font Awesome 6 Free';
+    font-weight: 900;
+    color: #94a3b8;
+    font-size: 0.875rem;
+    pointer-events: none;
+    z-index: 2;
+    transition: all 0.3s ease;
+}
+
+.login .form-row:first-of-type::after {
+    content: '\f007';
+}
+
+.login .form-row:last-of-type::after {
+    content: '\f023';
+}
+
+.login .form-row input[type="text"]:focus ~ label::after,
+.login .form-row input[type="password"]:focus ~ label::after,
+.login .form-row:has(input[type="text"]:focus)::after,
+.login .form-row:has(input[type="password"]:focus)::after {
+    color: #667eea;
+    transform: scale(1.1);
 }
 
 .login .form-row input[type="text"]:hover,
