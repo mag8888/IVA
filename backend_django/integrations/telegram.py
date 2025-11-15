@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 # Глобальная переменная для бота
 bot_application = None
 bot_event_loop = None
+bot_username = None  # Username бота для реферальных ссылок
 
 
 @sync_to_async
@@ -97,32 +98,39 @@ def get_invited_stats(db_user):
 
 async def get_referral_link(db_user, bot=None):
     """Получить реферальную ссылку для пользователя."""
-    bot_username = None
+    global bot_username
     
-    # Сначала проверяем настройки (быстрее)
-    bot_username = getattr(settings, 'TELEGRAM_BOT_USERNAME', None)
+    # Используем глобальный username бота (получен при инициализации)
+    current_bot_username = bot_username
     
-    # Если нет в настройках и есть бот, пытаемся получить из API
-    if not bot_username and bot:
+    # Если нет глобального username, проверяем настройки
+    if not current_bot_username:
+        current_bot_username = getattr(settings, 'TELEGRAM_BOT_USERNAME', None)
+    
+    # Если все еще нет и есть бот, пытаемся получить из API
+    if not current_bot_username and bot:
         try:
             bot_info = await bot.get_me()
-            bot_username = bot_info.username if bot_info else None
-            if bot_username:
-                logger.info(f"✅ Получен username бота из API: {bot_username}")
+            current_bot_username = bot_info.username if bot_info else None
+            if current_bot_username:
+                # Сохраняем для будущего использования
+                bot_username = current_bot_username
+                logger.info(f"✅ Получен username бота из API: {current_bot_username}")
         except Exception as e:
             logger.warning(f"⚠️  Не удалось получить username бота из API: {e}")
     
-    # Если есть username бота, используем его для реферальной ссылки
-    if bot_username:
-        referral_link = f"https://t.me/{bot_username}?start={db_user.referral_code}"
+    # Всегда используем Telegram ссылку, если есть username
+    if current_bot_username:
+        referral_link = f"https://t.me/{current_bot_username}?start={db_user.referral_code}"
         logger.debug(f"📝 Реферальная ссылка (Telegram): {referral_link}")
     else:
-        # Иначе используем веб-ссылку
+        # Если username не найден, логируем ошибку и используем веб-ссылку
+        logger.error("❌ Username бота не найден! Реферальные ссылки будут использовать веб-версию. Добавьте TELEGRAM_BOT_USERNAME в настройки.")
         base_url = settings.RAILWAY_PUBLIC_DOMAIN or settings.TELEGRAM_WEBAPP_URL or 'https://iva.up.railway.app'
         if not base_url.startswith('http'):
             base_url = f"https://{base_url}"
         referral_link = f"{base_url}/?ref={db_user.referral_code}"
-        logger.debug(f"📝 Реферальная ссылка (Web): {referral_link}")
+        logger.warning(f"📝 Реферальная ссылка (Web, fallback): {referral_link}")
     
     return referral_link
 
@@ -182,10 +190,21 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
                 # Если нет имени, используем username из Telegram или базы
                 user_name = telegram_user.username or db_user.username
             
-            # Получаем активные тарифы для кнопки оплаты
+            # Получаем статистику приглашенных
+            total_invited, invited_with_payment = await get_invited_stats(db_user)
+            
+            # Получаем реферальную ссылку
+            referral_link = await get_referral_link(db_user, context.bot)
+            
+            # Формируем информацию о структуре с пригласителем
+            level_info = "Еще не размещен в структуре"
+            if db_user.invited_by:
+                level_info = f"Еще не размещен в структуре (пригласитель - {db_user.invited_by.username})"
+            
+            # Проверяем наличие тарифов для кнопки оплаты
             tariffs = await get_active_tariffs()
             
-            # Создаем клавиатуру с кнопками
+            # Добавляем кнопку оплаты (всегда, если есть тарифы)
             keyboard = []
             if tariffs:
                 keyboard.append([InlineKeyboardButton(
@@ -195,20 +214,15 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             
             reply_markup = InlineKeyboardMarkup(keyboard) if keyboard else None
             
-            # Получаем статистику приглашенных
-            total_invited, invited_with_payment = await get_invited_stats(db_user)
-            
-            # Получаем реферальную ссылку
-            referral_link = await get_referral_link(db_user, context.bot)
-            
             # Формируем сообщение в новом формате
             message_text = (
                 f"Привет, {user_name}! 👋\n\n"
+                f"({telegram_id})\n\n"
                 f"📊 Твоя информация:\n"
                 f"📈 Статус: {db_user.get_status_display()}\n"
-                f"🌳 Еще не размещен в структуре\n"
-                f"💚 Бонус вывод (зеленый): $0.00\n"
-                f"💛 Бонус накопительный (желтый): $0.00\n"
+                f"🌳 {level_info}\n"
+                f"💚 Бонус вывод: $0.00\n"
+                f"💛 Бонус накопительный: $0.00\n"
                 f"💰 Всего бонусов: $0.00\n\n"
                 f"Приглашенных {total_invited}/{invited_with_payment}\n\n"
                 f"🔗 Реферальная ссылка: {referral_link}"
@@ -258,13 +272,15 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             # Если нет имени, используем username из Telegram или базы
             user_name = telegram_user.username or db_user.username
         
-        # Получаем активные тарифы для кнопки оплаты
+        # Формируем информацию о структуре с пригласителем
+        if not node and db_user.invited_by:
+            level_info = f"Еще не размещен в структуре (пригласитель - {db_user.invited_by.username})"
+        
+        # Проверяем наличие тарифов для кнопки оплаты
         tariffs = await get_active_tariffs()
         
-        # Создаем клавиатуру с кнопками
+        # Добавляем кнопку оплаты (всегда, если есть тарифы)
         keyboard = []
-        
-        # Если есть тарифы, добавляем кнопку оплаты
         if tariffs:
             keyboard.append([InlineKeyboardButton(
                 "💳 Оплатить",
@@ -276,11 +292,12 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         # Формируем сообщение в новом формате
         message_text = (
             f"Привет, {user_name}! 👋\n\n"
+            f"({telegram_id})\n\n"
             f"📊 Твоя информация:\n"
             f"📈 Статус: {db_user.get_status_display()}\n"
             f"🌳 {level_info}\n"
-            f"💚 Бонус вывод (зеленый): ${green_bonuses:.2f}\n"
-            f"💛 Бонус накопительный (желтый): ${yellow_bonuses:.2f}\n"
+            f"💚 Бонус вывод: ${green_bonuses:.2f}\n"
+            f"💛 Бонус накопительный: ${yellow_bonuses:.2f}\n"
             f"💰 Всего бонусов: ${total_bonuses:.2f}\n\n"
             f"Приглашенных {total_invited}/{invited_with_payment}\n\n"
             f"🔗 Реферальная ссылка: {referral_link}"
@@ -497,7 +514,7 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
 def init_telegram_bot():
     """Инициализация Telegram бота."""
-    global bot_application
+    global bot_application, bot_username
     
     # Проверяем, не запущен ли уже бот
     if bot_application is not None:
@@ -523,6 +540,23 @@ def init_telegram_bot():
     global bot_event_loop
     bot_event_loop = asyncio.new_event_loop()
     bot_event_loop.run_until_complete(application.initialize())
+    
+    # Получаем username бота при инициализации
+    try:
+        bot_info = bot_event_loop.run_until_complete(application.bot.get_me())
+        if bot_info and bot_info.username:
+            bot_username = bot_info.username
+            logger.info(f"✅ Получен username бота при инициализации: {bot_username}")
+        else:
+            # Пытаемся получить из настроек
+            bot_username = getattr(settings, 'TELEGRAM_BOT_USERNAME', None)
+            if bot_username:
+                logger.info(f"✅ Используется username бота из настроек: {bot_username}")
+            else:
+                logger.warning("⚠️  Username бота не найден, реферальные ссылки будут использовать веб-версию")
+    except Exception as e:
+        logger.warning(f"⚠️  Не удалось получить username бота при инициализации: {e}")
+        bot_username = getattr(settings, 'TELEGRAM_BOT_USERNAME', None)
     
     # Регистрируем обработчики команд
     application.add_handler(CommandHandler("start", start_command))
