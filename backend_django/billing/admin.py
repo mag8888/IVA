@@ -27,58 +27,76 @@ class PaymentAdmin(admin.ModelAdmin):
     
     def get_user_link(self, obj):
         """Ссылка на пользователя."""
-        return format_html(
-            '<a href="{}">{}</a>',
-            reverse('admin:core_user_change', args=[obj.user.id]),
-            obj.user.username
-        )
+        if not obj.pk or not hasattr(obj, 'user') or not obj.user:
+            return "-"
+        try:
+            return format_html(
+                '<a href="{}">{}</a>',
+                reverse('admin:core_user_change', args=[obj.user.id]),
+                obj.user.username
+            )
+        except Exception:
+            return str(obj.user.username) if obj.user.username else "-"
     get_user_link.short_description = "Пользователь"
     get_user_link.admin_order_field = 'user__username'
     
     def get_tariff_link(self, obj):
         """Ссылка на тариф."""
-        if obj.tariff:
+        if not obj.pk or not obj.tariff:
+            return "-"
+        try:
             return format_html(
                 '<a href="{}">{}</a>',
                 reverse('admin:mlm_tariff_change', args=[obj.tariff.id]),
                 obj.tariff.name
             )
-        return "-"
+        except Exception:
+            return str(obj.tariff.name) if obj.tariff else "-"
     get_tariff_link.short_description = "Тариф"
     get_tariff_link.admin_order_field = 'tariff__name'
     
     def get_amount_display(self, obj):
         """Отображение суммы с цветом."""
-        return format_html(
-            '<span style="color: #28a745; font-weight: bold; font-size: 1.1em;">${:.2f}</span>',
-            obj.amount
-        )
+        if not obj.pk:
+            return "-"
+        try:
+            return format_html(
+                '<span style="color: #28a745; font-weight: bold; font-size: 1.1em;">${:.2f}</span>',
+                obj.amount
+            )
+        except Exception:
+            return "-"
     get_amount_display.short_description = "Сумма"
     get_amount_display.admin_order_field = 'amount'
     
     def get_status_display(self, obj):
         """Отображение статуса с цветом."""
-        status_colors = {
-            'COMPLETED': '#28a745',
-            'PENDING': '#ffc107',
-            'FAILED': '#dc3545',
-            'CANCELLED': '#6c757d'
-        }
-        status_icons = {
-            'COMPLETED': '✅',
-            'PENDING': '⏳',
-            'FAILED': '❌',
-            'CANCELLED': '🚫'
-        }
-        color = status_colors.get(obj.status, '#000')
-        icon = status_icons.get(obj.status, '')
-        
-        return format_html(
-            '<span style="color: {}; font-weight: bold;">{} {}</span>',
-            color,
-            icon,
-            obj.get_status_display()
-        )
+        if not obj.pk:
+            return "-"
+        try:
+            status_colors = {
+                'COMPLETED': '#28a745',
+                'PENDING': '#ffc107',
+                'FAILED': '#dc3545',
+                'CANCELLED': '#6c757d'
+            }
+            status_icons = {
+                'COMPLETED': '✅',
+                'PENDING': '⏳',
+                'FAILED': '❌',
+                'CANCELLED': '🚫'
+            }
+            color = status_colors.get(obj.status, '#000')
+            icon = status_icons.get(obj.status, '')
+            
+            return format_html(
+                '<span style="color: {}; font-weight: bold;">{} {}</span>',
+                color,
+                icon,
+                obj.get_status_display()
+            )
+        except Exception:
+            return "-"
     get_status_display.short_description = "Статус"
     get_status_display.admin_order_field = 'status'
     
@@ -116,57 +134,82 @@ class BonusAdmin(admin.ModelAdmin):
     
     def get_user_link(self, obj):
         """Ссылка на получателя."""
-        return format_html(
-            '<a href="{}">{}</a>',
-            reverse('admin:core_user_change', args=[obj.user.id]),
-            obj.user.username
-        )
+        if not obj.pk or not hasattr(obj, 'user') or not obj.user:
+            return "-"
+        try:
+            return format_html(
+                '<a href="{}">{}</a>',
+                reverse('admin:core_user_change', args=[obj.user.id]),
+                obj.user.username
+            )
+        except Exception:
+            return str(obj.user.username) if obj.user.username else "-"
     get_user_link.short_description = "Получатель"
     get_user_link.admin_order_field = 'user__username'
     
     def get_source_user_link(self, obj):
         """Ссылка на источник бонуса."""
-        return format_html(
-            '<a href="{}">{}</a>',
-            reverse('admin:core_user_change', args=[obj.source_user.id]),
-            obj.source_user.username
-        )
+        if not obj.pk or not hasattr(obj, 'source_user') or not obj.source_user:
+            return "-"
+        try:
+            return format_html(
+                '<a href="{}">{}</a>',
+                reverse('admin:core_user_change', args=[obj.source_user.id]),
+                obj.source_user.username
+            )
+        except Exception:
+            return str(obj.source_user.username) if obj.source_user.username else "-"
     get_source_user_link.short_description = "Источник"
     get_source_user_link.admin_order_field = 'source_user__username'
     
     def get_bonus_type_display(self, obj):
         """Отображение типа бонуса с цветом."""
-        if obj.bonus_type == Bonus.BonusType.GREEN:
-            color = '#28a745'
-            icon = '💚'
-        else:
-            color = '#ffc107'
-            icon = '💛'
-        
-        return format_html(
-            '<span style="color: {}; font-weight: bold;">{} {}</span>',
-            color,
-            icon,
-            obj.get_bonus_type_display()
-        )
+        if not obj.pk:
+            return "-"
+        try:
+            if obj.bonus_type == Bonus.BonusType.GREEN:
+                color = '#28a745'
+                icon = '💚'
+            else:
+                color = '#ffc107'
+                icon = '💛'
+            
+            return format_html(
+                '<span style="color: {}; font-weight: bold;">{} {}</span>',
+                color,
+                icon,
+                obj.get_bonus_type_display()
+            )
+        except Exception:
+            return "-"
     get_bonus_type_display.short_description = "Тип"
     get_bonus_type_display.admin_order_field = 'bonus_type'
     
     def get_amount_display(self, obj):
         """Отображение суммы."""
-        return format_html(
-            '<span style="color: #417690; font-weight: bold; font-size: 1.1em;">${:.2f}</span>',
-            obj.amount
-        )
+        if not obj.pk:
+            return "-"
+        try:
+            return format_html(
+                '<span style="color: #417690; font-weight: bold; font-size: 1.1em;">${:.2f}</span>',
+                obj.amount
+            )
+        except Exception:
+            return "-"
     get_amount_display.short_description = "Сумма"
     get_amount_display.admin_order_field = 'amount'
     
     def get_payment_link(self, obj):
         """Ссылка на платеж."""
-        return format_html(
-            '<a href="{}">#{}</a>',
-            reverse('admin:billing_payment_change', args=[obj.payment.id]),
-            obj.payment.id
-        )
+        if not obj.pk or not hasattr(obj, 'payment') or not obj.payment:
+            return "-"
+        try:
+            return format_html(
+                '<a href="{}">#{}</a>',
+                reverse('admin:billing_payment_change', args=[obj.payment.id]),
+                obj.payment.id
+            )
+        except Exception:
+            return "-"
     get_payment_link.short_description = "Платеж"
     get_payment_link.admin_order_field = 'payment__id'
