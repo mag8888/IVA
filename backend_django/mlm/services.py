@@ -141,13 +141,22 @@ def place_user(user, payment):
     # Находим родителя для размещения
     parent_user, position = find_parent_for_new_partner(user)
     
+    # Проверяем, найдено ли место для размещения
+    # Если есть узлы в структуре, но не найден parent, значит структура заполнена
+    if StructureNode.objects.exists() and parent_user is None and position is None:
+        raise ValidationError("Структура заполнена. Нет свободных мест для размещения нового партнера.")
+    
     # Определяем уровень
     if parent_user is None:
-        # Это корневой пользователь
+        # Это корневой пользователь (структура пуста)
         level = 0
+        position = 1  # Корень всегда имеет позицию 1
     else:
-        parent_node = StructureNode.objects.get(user=parent_user)
-        level = parent_node.level + 1
+        try:
+            parent_node = StructureNode.objects.get(user=parent_user)
+            level = parent_node.level + 1
+        except StructureNode.DoesNotExist:
+            raise ValidationError(f"Родительский узел для пользователя {parent_user.username} не найден")
     
     # Создаем узел структуры
     structure_node = StructureNode.objects.create(

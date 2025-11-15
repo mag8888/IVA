@@ -5,6 +5,7 @@ API Views для REST API.
 import secrets
 import random
 import string
+import logging
 from decimal import Decimal
 from django.db import transaction, models
 from django.utils import timezone
@@ -21,6 +22,8 @@ from .serializers import (
     RegisterSerializer, CompleteRegistrationSerializer, QueueItemSerializer,
     StructureNodeSerializer, BonusSerializer, TariffSerializer
 )
+
+logger = logging.getLogger(__name__)
 
 
 @api_view(['GET'])
@@ -179,7 +182,7 @@ def queue_public(request):
 
 
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
+@permission_classes([AllowAny])  # Изменено на AllowAny для публичного доступа
 def complete(request):
     """
     Завершить регистрацию партнера.
@@ -188,16 +191,28 @@ def complete(request):
     serializer = CompleteRegistrationSerializer(data=request.data)
     
     if not serializer.is_valid():
+        logger.error(f"❌ Ошибка валидации: {serializer.errors}")
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
     user_id = serializer.validated_data['user_id']
+    logger.info(f"🔄 Завершение регистрации для пользователя {user_id}")
     
     try:
         user = User.objects.get(id=user_id)
     except User.DoesNotExist:
+        logger.error(f"❌ Пользователь {user_id} не найден")
         return Response(
-            {"error": "Пользователь не найден"},
+            {"error": f"Пользователь с ID {user_id} не найден"},
             status=status.HTTP_404_NOT_FOUND
+        )
+    
+    # Проверяем, размещен ли пользователь уже в структуре
+    from mlm.models import StructureNode
+    if StructureNode.objects.filter(user=user).exists():
+        logger.warning(f"⚠️ Пользователь {user.username} уже размещен в структуре")
+        return Response(
+            {"error": f"Пользователь {user.username} уже размещен в структуре. Регистрация уже завершена."},
+            status=status.HTTP_400_BAD_REQUEST
         )
     
     # Получаем pending платеж
@@ -206,38 +221,81 @@ def complete(request):
             user=user,
             status=Payment.PaymentStatus.PENDING
         )
+        logger.info(f"✅ Найден pending платеж {payment.id} для пользователя {user.username}")
     except Payment.DoesNotExist:
-        return Response(
-            {"error": "Ожидающий платеж не найден"},
-            status=status.HTTP_400_BAD_REQUEST
-        )
+        # Проверяем, есть ли завершенный платеж
+        completed_payment = Payment.objects.filter(
+            user=user,
+            status=Payment.PaymentStatus.COMPLETED
+        ).first()
+        
+        if completed_payment:
+            logger.warning(f"⚠️ Платеж уже завершен для пользователя {user.username}")
+            return Response(
+                {"error": f"Платеж уже завершен. Пользователь должен быть размещен в структуре."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        else:
+            logger.error(f"❌ Ожидающий платеж не найден для пользователя {user.username}")
+            return Response(
+                {"error": f"Ожидающий платеж не найден для пользователя {user.username}"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
     
     try:
         with transaction.atomic():
             # 1. Завершаем платеж
+            logger.info(f"🔄 Завершаем платеж {payment.id}")
             payment.mark_completed()
             
             # 2. Меняем статус пользователя на PARTNER
-            user.status = User.UserStatus.PARTNER
-            user.save()
+            if user.status == User.UserStatus.PARTICIPANT:
+                logger.info(f"🔄 Меняем статус пользователя {user.username} на PARTNER")
+                user.status = User.UserStatus.PARTNER
+                user.save()
+            else:
+                logger.info(f"ℹ️ Статус пользователя {user.username} уже {user.get_status_display()}")
             
             # 3. Размещаем пользователя в структуре (на сервере)
-            structure_node = place_user(user, payment)
+            try:
+                logger.info(f"🔄 Размещаем пользователя {user.username} в структуре")
+                structure_node = place_user(user, payment)
+                logger.info(f"✅ Пользователь {user.username} размещен: Level {structure_node.level}, Position {structure_node.position}")
+            except Exception as place_error:
+                logger.error(f"❌ Ошибка при размещении пользователя {user.username} в структуре: {place_error}")
+                # Если размещение не удалось, продолжаем и начисляем бонусы
+                structure_node = None
             
             # 4. Начисляем бонусы (на сервере, согласно БД)
-            bonuses = apply_signup_bonuses(user, payment)
+            try:
+                logger.info(f"🔄 Начисляем бонусы для пользователя {user.username}")
+                bonuses = apply_signup_bonuses(user, payment)
+                logger.info(f"✅ Начислено бонусов: {len(bonuses)}")
+            except Exception as bonus_error:
+                logger.error(f"❌ Ошибка при начислении бонусов: {bonus_error}")
+                bonuses = []
             
-            return Response({
+            response_data = {
                 "detail": "Регистрация завершена",
-                "placement_parent": structure_node.parent.username if structure_node.parent else None,
-                "level": structure_node.level,
-                "position": structure_node.position,
                 "bonuses_created": len(bonuses),
-            }, status=status.HTTP_200_OK)
+            }
+            
+            if structure_node:
+                response_data.update({
+                    "placement_parent": structure_node.parent.username if structure_node.parent else None,
+                    "level": structure_node.level,
+                    "position": structure_node.position,
+                })
+            else:
+                response_data["warning"] = "Пользователь не был размещен в структуре (возможно, структура заполнена или произошла ошибка)"
+            
+            logger.info(f"✅ Регистрация завершена для пользователя {user.username}")
+            return Response(response_data, status=status.HTTP_200_OK)
     
     except Exception as e:
+        logger.error(f"❌ Критическая ошибка при завершении регистрации: {e}", exc_info=True)
         return Response(
-            {"error": str(e)},
+            {"error": f"Ошибка завершения регистрации: {str(e)}"},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
