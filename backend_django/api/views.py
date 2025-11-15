@@ -307,13 +307,79 @@ def bonuses(request):
     return Response(serializer.data)
 
 
-@api_view(['GET'])
+@api_view(['GET', 'POST'])
 @permission_classes([AllowAny])
 def tariffs(request):
     """
-    Получить все активные тарифы.
+    Получить все активные тарифы или создать новые.
     """
-    tariffs_list = Tariff.objects.filter(is_active=True)
+    if request.method == 'POST':
+        # Создание тарифов через API
+        try:
+            from django.conf import settings
+            
+            # Получаем проценты бонусов из настроек
+            green_bonus_percent = settings.MLM_SETTINGS.get('DEFAULT_GREEN_BONUS_PERCENT', 50)
+            yellow_bonus_percent = settings.MLM_SETTINGS.get('DEFAULT_YELLOW_BONUS_PERCENT', 50)
+            
+            # Стандартные тарифы
+            tariffs_data = [
+                {'code': 'tariff_20', 'name': 'Тариф $20', 'entry_amount': Decimal('20.00')},
+                {'code': 'tariff_50', 'name': 'Тариф $50', 'entry_amount': Decimal('50.00')},
+                {'code': 'tariff_100', 'name': 'Тариф $100', 'entry_amount': Decimal('100.00')},
+                {'code': 'tariff_500', 'name': 'Тариф $500', 'entry_amount': Decimal('500.00')},
+                {'code': 'tariff_1000', 'name': 'Тариф $1000', 'entry_amount': Decimal('1000.00')},
+            ]
+            
+            created_tariffs = []
+            updated_tariffs = []
+            
+            with transaction.atomic():
+                for tariff_data in tariffs_data:
+                    tariff, created = Tariff.objects.get_or_create(
+                        code=tariff_data['code'],
+                        defaults={
+                            'name': tariff_data['name'],
+                            'entry_amount': tariff_data['entry_amount'],
+                            'green_bonus_percent': green_bonus_percent,
+                            'yellow_bonus_percent': yellow_bonus_percent,
+                            'is_active': True,
+                        }
+                    )
+                    
+                    if created:
+                        created_tariffs.append(tariff)
+                    else:
+                        # Обновляем существующий тариф
+                        tariff.name = tariff_data['name']
+                        tariff.entry_amount = tariff_data['entry_amount']
+                        tariff.green_bonus_percent = green_bonus_percent
+                        tariff.yellow_bonus_percent = yellow_bonus_percent
+                        tariff.is_active = True
+                        tariff.save()
+                        updated_tariffs.append(tariff)
+            
+            serializer = TariffSerializer(created_tariffs + updated_tariffs, many=True)
+            
+            return Response({
+                "success": True,
+                "message": f"Создано тарифов: {len(created_tariffs)}, Обновлено: {len(updated_tariffs)}",
+                "created": len(created_tariffs),
+                "updated": len(updated_tariffs),
+                "tariffs": serializer.data,
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            return Response(
+                {
+                    "success": False,
+                    "error": str(e),
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    # GET запрос - получить все активные тарифы
+    tariffs_list = Tariff.objects.filter(is_active=True).order_by('entry_amount')
     serializer = TariffSerializer(tariffs_list, many=True)
     return Response(serializer.data)
 
