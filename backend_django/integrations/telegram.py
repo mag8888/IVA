@@ -10,13 +10,13 @@ from django.http import HttpResponse, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, ContextTypes
+from telegram.ext import Application, CommandHandler, ContextTypes, CallbackQueryHandler
 from telegram.request import HTTPXRequest
 from django.db import models
 from asgiref.sync import sync_to_async
 from core.models import User
-from mlm.models import StructureNode
-from billing.models import Bonus
+from mlm.models import StructureNode, Tariff
+from billing.models import Bonus, Payment
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +31,7 @@ def get_user_by_telegram_id(telegram_id):
 
 
 @sync_to_async
-def create_user_from_telegram(telegram_id, telegram_user):
+def create_user_from_telegram(telegram_id, telegram_user, inviter=None):
     username = f"tg_{telegram_id}"
     if User.objects.filter(username=username).exists():
         username = f"tg_{telegram_id}_{secrets.token_hex(4)}"
@@ -41,6 +41,7 @@ def create_user_from_telegram(telegram_id, telegram_user):
         telegram_id=telegram_id,
         first_name=telegram_user.first_name,
         last_name=telegram_user.last_name or '',
+        invited_by=inviter,
     )
 
 
@@ -60,6 +61,77 @@ def get_bonus_summary(db_user):
     return total, green, yellow
 
 
+@sync_to_async
+def get_active_tariffs():
+    """Получить список активных тарифов."""
+    return list(Tariff.objects.filter(is_active=True).order_by('entry_amount'))
+
+
+@sync_to_async
+def create_payment_for_user(user, tariff, amount):
+    """Создать платеж для пользователя."""
+    from django.utils import timezone
+    payment = Payment.objects.create(
+        user=user,
+        tariff=tariff,
+        amount=amount,
+        status=Payment.PaymentStatus.PENDING,
+    )
+    return payment
+
+
+@sync_to_async
+def get_invited_stats(db_user):
+    """Получить статистику приглашенных пользователей."""
+    # Все приглашенные пользователи
+    total_invited = User.objects.filter(invited_by=db_user).count()
+    
+    # Приглашенные, которые оплатили (имеют хотя бы один завершенный платеж)
+    invited_with_payment = User.objects.filter(
+        invited_by=db_user,
+        payments__status=Payment.PaymentStatus.COMPLETED
+    ).distinct().count()
+    
+    return total_invited, invited_with_payment
+
+
+async def get_referral_link(db_user, bot=None):
+    """Получить реферальную ссылку для пользователя."""
+    # Пытаемся получить username бота из API
+    bot_username = None
+    if bot:
+        try:
+            bot_info = await bot.get_me()
+            bot_username = bot_info.username
+        except Exception as e:
+            logger.warning(f"Не удалось получить username бота: {e}")
+    
+    # Если не получили username бота, используем настройки
+    if not bot_username:
+        bot_username = getattr(settings, 'TELEGRAM_BOT_USERNAME', None)
+    
+    # Если есть username бота, используем его для реферальной ссылки
+    if bot_username:
+        referral_link = f"https://t.me/{bot_username}?start={db_user.referral_code}"
+    else:
+        # Иначе используем веб-ссылку
+        base_url = settings.RAILWAY_PUBLIC_DOMAIN or settings.TELEGRAM_WEBAPP_URL or 'https://iva.up.railway.app'
+        if not base_url.startswith('http'):
+            base_url = f"https://{base_url}"
+        referral_link = f"{base_url}/?ref={db_user.referral_code}"
+    
+    return referral_link
+
+
+@sync_to_async
+def get_user_by_referral_code(referral_code):
+    """Получить пользователя по реферальному коду."""
+    try:
+        return User.objects.get(referral_code=referral_code)
+    except User.DoesNotExist:
+        return None
+
+
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Обработчик команды /start."""
     logger.info(f"📥 Получена команда /start от пользователя {update.effective_user.id if update.effective_user else 'unknown'}")
@@ -70,25 +142,77 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     
     telegram_id = telegram_user.id
     
+    # Получаем реферальный код из параметра команды (если есть)
+    referral_code = None
+    if update.message and update.message.text:
+        parts = update.message.text.split()
+        if len(parts) > 1:
+            referral_code = parts[1]
+            logger.info(f"🔗 Найден реферальный код: {referral_code}")
+    
     try:
         db_user = await get_user_by_telegram_id(telegram_id)
         logger.info(f"✅ Пользователь {telegram_id} найден в БД: {db_user.username}")
     except User.DoesNotExist:
         logger.info(f"ℹ️  Пользователь {telegram_id} не найден в БД, создаем нового")
         try:
-            db_user = await create_user_from_telegram(telegram_id, telegram_user)
+            # Если есть реферальный код, находим пригласившего пользователя
+            inviter = None
+            if referral_code:
+                inviter = await get_user_by_referral_code(referral_code)
+                if inviter:
+                    logger.info(f"✅ Найден пригласивший пользователь: {inviter.username}")
+                else:
+                    logger.warning(f"⚠️  Реферальный код {referral_code} не найден")
+            
+            # Создаем пользователя с указанием пригласившего
+            db_user = await create_user_from_telegram(telegram_id, telegram_user, inviter)
             logger.info(f"✅ Создан новый пользователь для Telegram ID {telegram_id}: {db_user.username}")
             
-            await update.message.reply_text(
-                f"Привет, {telegram_user.first_name}! 👋\n\n"
-                f"✅ Ты зарегистрирован в Equilibrium MLM System!\n\n"
+            # Получаем имя пользователя (предпочтительно first_name из Telegram)
+            if telegram_user.first_name:
+                user_name = telegram_user.first_name
+                if telegram_user.last_name:
+                    user_name = f"{telegram_user.first_name} {telegram_user.last_name}"
+            else:
+                # Если нет имени, используем username из Telegram или базы
+                user_name = telegram_user.username or db_user.username
+            
+            # Получаем активные тарифы для кнопки оплаты
+            tariffs = await get_active_tariffs()
+            
+            # Создаем клавиатуру с кнопками
+            keyboard = []
+            if tariffs:
+                keyboard.append([InlineKeyboardButton(
+                    "💳 Оплатить",
+                    callback_data="pay_select_tariff"
+                )])
+            
+            reply_markup = InlineKeyboardMarkup(keyboard) if keyboard else None
+            
+            # Получаем статистику приглашенных
+            total_invited, invited_with_payment = await get_invited_stats(db_user)
+            
+            # Получаем реферальную ссылку
+            referral_link = await get_referral_link(db_user, update.message.bot)
+            
+            # Формируем сообщение в новом формате
+            message_text = (
+                f"Привет, {user_name}! 👋\n\n"
                 f"📊 Твоя информация:\n"
-                f"👤 Username: {db_user.username}\n"
-                f"🔗 Реферальный код: `{db_user.referral_code}`\n"
-                f"📈 Статус: {db_user.get_status_display()}\n\n"
-                f"Используй команды:\n"
-                f"/app - открыть структуру\n"
-                f"/stats - статистика"
+                f"📈 Статус: {db_user.get_status_display()}\n"
+                f"🌳 Еще не размещен в структуре\n"
+                f"💚 Бонус вывод (зеленый): $0.00\n"
+                f"💛 Бонус накопительный (желтый): $0.00\n"
+                f"💰 Всего бонусов: $0.00\n\n"
+                f"Приглашенных {total_invited}/{invited_with_payment}\n\n"
+                f"🔗 Реферальная ссылка: {referral_link}"
+            )
+            
+            await update.message.reply_text(
+                message_text,
+                reply_markup=reply_markup
             )
             return
         except Exception as e:
@@ -108,18 +232,55 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         if node:
             level_info = f"Уровень: {node.level}, Позиция: {node.position}"
         
-        total_bonuses, _, _ = await get_bonus_summary(db_user)
+        # Получаем бонусы: всего, зеленые (вывод), желтые (накопительный)
+        total_bonuses, green_bonuses, yellow_bonuses = await get_bonus_summary(db_user)
         
-        await update.message.reply_text(
-            f"Привет, {db_user.username or telegram_user.first_name}! 👋\n\n"
+        # Получаем статистику приглашенных
+        total_invited, invited_with_payment = await get_invited_stats(db_user)
+        
+        # Получаем реферальную ссылку
+        referral_link = await get_referral_link(db_user, update.message.bot)
+        
+        # Получаем имя пользователя (предпочтительно first_name из Telegram)
+        if telegram_user.first_name:
+            user_name = telegram_user.first_name
+            if telegram_user.last_name:
+                user_name = f"{telegram_user.first_name} {telegram_user.last_name}"
+        else:
+            # Если нет имени, используем username из Telegram или базы
+            user_name = telegram_user.username or db_user.username
+        
+        # Получаем активные тарифы для кнопки оплаты
+        tariffs = await get_active_tariffs()
+        
+        # Создаем клавиатуру с кнопками
+        keyboard = []
+        
+        # Если есть тарифы, добавляем кнопку оплаты
+        if tariffs:
+            keyboard.append([InlineKeyboardButton(
+                "💳 Оплатить",
+                callback_data="pay_select_tariff"
+            )])
+        
+        reply_markup = InlineKeyboardMarkup(keyboard) if keyboard else None
+        
+        # Формируем сообщение в новом формате
+        message_text = (
+            f"Привет, {user_name}! 👋\n\n"
             f"📊 Твоя информация:\n"
-            f"🔗 Реферальный код: `{db_user.referral_code}`\n"
             f"📈 Статус: {db_user.get_status_display()}\n"
             f"🌳 {level_info}\n"
+            f"💚 Бонус вывод (зеленый): ${green_bonuses:.2f}\n"
+            f"💛 Бонус накопительный (желтый): ${yellow_bonuses:.2f}\n"
             f"💰 Всего бонусов: ${total_bonuses:.2f}\n\n"
-            f"Используй команды:\n"
-            f"/app - открыть структуру\n"
-            f"/stats - подробная статистика"
+            f"Приглашенных {total_invited}/{invited_with_payment}\n\n"
+            f"🔗 Реферальная ссылка: {referral_link}"
+        )
+        
+        await update.message.reply_text(
+            message_text,
+            reply_markup=reply_markup
         )
     except Exception as e:
         logger.error(f"❌ Критическая ошибка в start_command: {e}", exc_info=True)
@@ -172,6 +333,94 @@ async def app_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         "Нажмите кнопку ниже, чтобы открыть вашу MLM структуру:",
         reply_markup=reply_markup
     )
+
+
+async def payment_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Обработчик callback для кнопки оплаты."""
+    query = update.callback_query
+    await query.answer()
+    
+    telegram_user = update.effective_user
+    if not telegram_user:
+        return
+    
+    telegram_id = telegram_user.id
+    
+    try:
+        db_user = await get_user_by_telegram_id(telegram_id)
+    except User.DoesNotExist:
+        await query.edit_message_text("❌ Вы не зарегистрированы в системе. Используйте /start")
+        return
+    
+    if query.data == "pay_select_tariff":
+        # Получаем активные тарифы
+        tariffs = await get_active_tariffs()
+        
+        if not tariffs:
+            await query.edit_message_text("❌ Нет доступных тарифов для оплаты.")
+            return
+        
+        # Создаем кнопки для выбора тарифа
+        keyboard = []
+        for tariff in tariffs:
+            keyboard.append([InlineKeyboardButton(
+                f"{tariff.name} - ${tariff.entry_amount}",
+                callback_data=f"pay_tariff_{tariff.id}"
+            )])
+        
+        keyboard.append([InlineKeyboardButton("❌ Отмена", callback_data="pay_cancel")])
+        
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        tariffs_text = "\n".join([
+            f"• {tariff.name} - ${tariff.entry_amount}"
+            for tariff in tariffs
+        ])
+        
+        await query.edit_message_text(
+            f"💳 Выберите тариф для оплаты:\n\n{tariffs_text}",
+            reply_markup=reply_markup
+        )
+    
+    elif query.data.startswith("pay_tariff_"):
+        tariff_id = int(query.data.split("_")[-1])
+        tariffs = await get_active_tariffs()
+        selected_tariff = next((t for t in tariffs if t.id == tariff_id), None)
+        
+        if not selected_tariff:
+            await query.edit_message_text("❌ Тариф не найден.")
+            return
+        
+        # Создаем платеж
+        payment = await create_payment_for_user(
+            db_user,
+            selected_tariff,
+            selected_tariff.entry_amount
+        )
+        
+        # Здесь можно интегрировать платежную систему
+        # Пока просто информируем пользователя
+        payment_url = f"{settings.RAILWAY_PUBLIC_DOMAIN or 'https://iva.up.railway.app'}/pay/{payment.id}/"
+        
+        keyboard = [[InlineKeyboardButton(
+            "🔗 Перейти к оплате",
+            url=payment_url
+        )]]
+        keyboard.append([InlineKeyboardButton("↩️ Назад", callback_data="pay_select_tariff")])
+        
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(
+            f"💳 Создан платеж:\n\n"
+            f"Тариф: {selected_tariff.name}\n"
+            f"Сумма: ${selected_tariff.entry_amount}\n"
+            f"ID платежа: {payment.id}\n\n"
+            f"Нажмите кнопку ниже для оплаты:",
+            reply_markup=reply_markup
+        )
+    
+    elif query.data == "pay_cancel":
+        await query.edit_message_text("❌ Оплата отменена. Используйте /start для возврата в главное меню.")
 
 
 async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -248,12 +497,13 @@ def init_telegram_bot():
         logger.warning("TELEGRAM_BOT_TOKEN не установлен. Telegram бот не будет запущен.")
         return None
     
-    # Создаем приложение
+    # Создаем приложение с увеличенными таймаутами
+    # Увеличиваем таймауты для Railway (может быть медленное соединение с Telegram API)
     request = HTTPXRequest(
-        connect_timeout=10,
-        read_timeout=10,
-        write_timeout=10,
-        pool_timeout=10,
+        connect_timeout=30.0,  # Увеличен до 30 секунд
+        read_timeout=30.0,     # Увеличен до 30 секунд
+        write_timeout=30.0,    # Увеличен до 30 секунд
+        pool_timeout=30.0,     # Увеличен до 30 секунд
     )
     application = Application.builder().token(token).request(request).build()
     
@@ -266,6 +516,9 @@ def init_telegram_bot():
     application.add_handler(CommandHandler("start", start_command))
     application.add_handler(CommandHandler("app", app_command))
     application.add_handler(CommandHandler("stats", stats_command))
+    
+    # Регистрируем обработчик callback для кнопок оплаты
+    application.add_handler(CallbackQueryHandler(payment_callback, pattern="^pay_"))
     
     # Сохраняем глобально
     bot_application = application
@@ -360,6 +613,8 @@ def telegram_webhook(request):
         # Логируем входящее обновление
         if update.message and update.message.text:
             logger.info(f"📨 Получено сообщение: {update.message.text} от {update.effective_user.id if update.effective_user else 'unknown'}")
+        elif update.callback_query:
+            logger.info(f"📨 Получен callback: {update.callback_query.data} от {update.effective_user.id if update.effective_user else 'unknown'}")
         elif update.message:
             logger.info(f"📨 Получено обновление от {update.effective_user.id if update.effective_user else 'unknown'}")
         
@@ -374,13 +629,22 @@ def telegram_webhook(request):
         except Exception as process_error:
             logger.error(f"❌ Ошибка при process_update: {process_error}", exc_info=True)
             try:
-                if update.message and update.effective_user:
-                    bot_event_loop.run_until_complete(
-                        bot_application.bot.send_message(
-                            chat_id=update.effective_user.id,
-                            text="❌ Произошла ошибка при обработке команды. Попробуйте позже."
+                if update.effective_user:
+                    if update.message:
+                        bot_event_loop.run_until_complete(
+                            bot_application.bot.send_message(
+                                chat_id=update.effective_user.id,
+                                text="❌ Произошла ошибка при обработке команды. Попробуйте позже."
+                            )
                         )
-                    )
+                    elif update.callback_query:
+                        bot_event_loop.run_until_complete(
+                            bot_application.bot.answer_callback_query(
+                                callback_query_id=update.callback_query.id,
+                                text="❌ Произошла ошибка при обработке. Попробуйте позже.",
+                                show_alert=True
+                            )
+                        )
             except Exception as send_error:
                 logger.error(f"❌ Не удалось отправить сообщение об ошибке: {send_error}")
         
