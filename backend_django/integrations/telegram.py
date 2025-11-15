@@ -97,28 +97,32 @@ def get_invited_stats(db_user):
 
 async def get_referral_link(db_user, bot=None):
     """Получить реферальную ссылку для пользователя."""
-    # Пытаемся получить username бота из API
     bot_username = None
-    if bot:
+    
+    # Сначала проверяем настройки (быстрее)
+    bot_username = getattr(settings, 'TELEGRAM_BOT_USERNAME', None)
+    
+    # Если нет в настройках и есть бот, пытаемся получить из API
+    if not bot_username and bot:
         try:
             bot_info = await bot.get_me()
-            bot_username = bot_info.username
+            bot_username = bot_info.username if bot_info else None
+            if bot_username:
+                logger.info(f"✅ Получен username бота из API: {bot_username}")
         except Exception as e:
-            logger.warning(f"Не удалось получить username бота: {e}")
-    
-    # Если не получили username бота, используем настройки
-    if not bot_username:
-        bot_username = getattr(settings, 'TELEGRAM_BOT_USERNAME', None)
+            logger.warning(f"⚠️  Не удалось получить username бота из API: {e}")
     
     # Если есть username бота, используем его для реферальной ссылки
     if bot_username:
         referral_link = f"https://t.me/{bot_username}?start={db_user.referral_code}"
+        logger.debug(f"📝 Реферальная ссылка (Telegram): {referral_link}")
     else:
         # Иначе используем веб-ссылку
         base_url = settings.RAILWAY_PUBLIC_DOMAIN or settings.TELEGRAM_WEBAPP_URL or 'https://iva.up.railway.app'
         if not base_url.startswith('http'):
             base_url = f"https://{base_url}"
         referral_link = f"{base_url}/?ref={db_user.referral_code}"
+        logger.debug(f"📝 Реферальная ссылка (Web): {referral_link}")
     
     return referral_link
 
@@ -210,10 +214,14 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
                 f"🔗 Реферальная ссылка: {referral_link}"
             )
             
-            await update.message.reply_text(
-                message_text,
-                reply_markup=reply_markup
-            )
+            try:
+                await update.message.reply_text(
+                    message_text,
+                    reply_markup=reply_markup
+                )
+                logger.info(f"✅ Сообщение успешно отправлено новому пользователю {telegram_id}")
+            except Exception as send_error:
+                logger.error(f"❌ Ошибка при отправке сообщения новому пользователю: {send_error}", exc_info=True)
             return
         except Exception as e:
             logger.error(f"❌ Ошибка создания пользователя: {e}", exc_info=True)
@@ -278,10 +286,14 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             f"🔗 Реферальная ссылка: {referral_link}"
         )
         
-        await update.message.reply_text(
-            message_text,
-            reply_markup=reply_markup
-        )
+        try:
+            await update.message.reply_text(
+                message_text,
+                reply_markup=reply_markup
+            )
+            logger.info(f"✅ Сообщение успешно отправлено пользователю {telegram_id}")
+        except Exception as send_error:
+            logger.error(f"❌ Ошибка при отправке сообщения: {send_error}", exc_info=True)
     except Exception as e:
         logger.error(f"❌ Критическая ошибка в start_command: {e}", exc_info=True)
         try:
