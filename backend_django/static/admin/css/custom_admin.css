@@ -730,6 +730,8 @@ fieldset.module .form-row:last-child {
     position: relative;
     z-index: 1;
     animation: slideUp 0.4s ease;
+    box-sizing: border-box;
+    margin: 0 auto;
 }
 
 @keyframes slideUp {
@@ -754,6 +756,9 @@ fieldset.module .form-row:last-child {
     margin-bottom: 1.5rem;
     position: relative;
     z-index: 1;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
 }
 
 .login .form-row:last-of-type {
@@ -767,11 +772,14 @@ fieldset.module .form-row:last-child {
     display: block;
     font-size: 0.875rem;
     letter-spacing: 0;
+    width: 100%;
 }
 
 .login .form-row input[type="text"],
-.login .form-row input[type="password"] {
+.login .form-row input[type="password"],
+.login .form-row input[type="email"] {
     width: 100%;
+    max-width: 100%;
     padding: 0.875rem 1rem;
     border: 1.5px solid #e2e8f0;
     border-radius: 8px;
@@ -781,22 +789,29 @@ fieldset.module .form-row:last-child {
     box-sizing: border-box;
     font-weight: 400;
     color: #1e293b;
+    margin: 0;
+    display: block;
 }
 
 .login .form-row input[type="text"]:hover,
-.login .form-row input[type="password"]:hover {
+.login .form-row input[type="password"]:hover,
+.login .form-row input[type="email"]:hover {
     border-color: #cbd5e1;
+    background: #fafbfc;
 }
 
 .login .form-row input[type="text"]:focus,
-.login .form-row input[type="password"]:focus {
+.login .form-row input[type="password"]:focus,
+.login .form-row input[type="email"]:focus {
     outline: none;
     border-color: #667eea;
     box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    background: #ffffff;
 }
 
 .login .form-row input[type="text"]::placeholder,
-.login .form-row input[type="password"]::placeholder {
+.login .form-row input[type="password"]::placeholder,
+.login .form-row input[type="email"]::placeholder {
     color: #94a3b8;
     font-weight: 400;
 }
@@ -806,10 +821,14 @@ fieldset.module .form-row:last-child {
     margin-top: 2rem;
     position: relative;
     z-index: 1;
+    width: 100%;
+    padding: 0;
 }
 
-.login .submit-row input {
+.login .submit-row input[type="submit"],
+.login .submit-row button {
     width: 100%;
+    max-width: 100%;
     padding: 0.875rem 2rem;
     font-size: 0.9375rem;
     font-weight: 600;
@@ -818,19 +837,43 @@ fieldset.module .form-row:last-child {
     border: none;
     border-radius: 8px;
     cursor: pointer;
-    transition: all 0.2s ease;
-    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 
+        0 4px 12px rgba(102, 126, 234, 0.3),
+        0 2px 4px rgba(0, 0, 0, 0.1);
+    display: block;
+    margin: 0 auto;
+    letter-spacing: 0.02em;
+    text-transform: none;
 }
 
-.login .submit-row input:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+.login .submit-row input[type="submit"]:hover,
+.login .submit-row button:hover {
+    transform: translateY(-2px);
+    box-shadow: 
+        0 6px 16px rgba(102, 126, 234, 0.4),
+        0 4px 8px rgba(0, 0, 0, 0.15);
     background: linear-gradient(135deg, #7c8ef5 0%, #8a5fb8 100%);
 }
 
-.login .submit-row input:active {
+.login .submit-row input[type="submit"]:active,
+.login .submit-row button:active {
     transform: translateY(0);
-    box-shadow: 0 2px 6px rgba(102, 126, 234, 0.3);
+    box-shadow: 
+        0 2px 8px rgba(102, 126, 234, 0.3),
+        0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.login form {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+}
+
+.login #content form {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
 }
 
 .login .errornote {
