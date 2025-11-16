@@ -1349,3 +1349,23 @@ a:hover {
 .p-3 { padding: 1.5rem; }
 .p-4 { padding: 2rem; }
 
+
+/* ===== TABLE POLISH (density, zebra, minor type tweaks) ===== */
+/* Slightly lighter header weight for readability */
+.module table thead th,
+#result_list thead th {
+    font-weight: 600;
+}
+
+/* Comfortable row height */
+.module table tbody tr,
+#result_list tbody tr {
+    height: 52px;
+}
+
+/* Zebra rows for better scanability */
+.module table tbody tr:nth-child(even),
+#result_list tbody tr:nth-child(even) {
+    background: #f9fafb;
+}
+
