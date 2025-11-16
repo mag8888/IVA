@@ -1,6 +1,5 @@
 {% extends "admin/base_site.html" %}
 {% load static %}
-{% load admin_urls %}
 {% load admin_stats %}
 
 {% block extrastyle %}
@@ -9,6 +8,10 @@
 {% endblock %}
 
 {% block content %}
+  {% total_revenue as total_revenue_value %}
+  {% total_bonuses as total_bonuses_value %}
+  {% green_bonuses as green_bonuses_value %}
+  {% yellow_bonuses as yellow_bonuses_value %}
   <div class="dashboard-header">
     <h1>📊 Панель управления</h1>
     <div class="actions">
@@ -33,7 +36,7 @@
     </div>
     <div class="stat-card orange">
       <h3>💰 Выручка</h3>
-      <p class="value">${% total_revenue %|floatformat:0 %}</p>
+      <p class="value">${{ total_revenue_value|floatformat:0 }}</p>
     </div>
   </div>
 
@@ -50,20 +53,20 @@
       <h3>Ожидает</h3>
       <p class="value">{% pending_payments %}</p>
     </div>
-    <div className="stat-card purple">
+    <div class="stat-card purple">
       <h3>🎁 Бонусов всего</h3>
-      <p class="value">${% total_bonuses %|floatformat:0 %}</p>
+      <p class="value">${{ total_bonuses_value|floatformat:0 }}</p>
     </div>
   </div>
 
   <div class="dashboard-stats">
     <div class="stat-card green">
       <h3>💚 Зеленые бонусы</h3>
-      <p class="value">${% green_bonuses %|floatformat:0 %}</p>
+      <p class="value">${{ green_bonuses_value|floatformat:0 }}</p>
     </div>
     <div class="stat-card orange">
       <h3>💛 Желтые бонусы</h3>
-      <p class="value">${% yellow_bonuses %|floatformat:0 %}</p>
+      <p class="value">${{ yellow_bonuses_value|floatformat:0 }}</p>
     </div>
     <div class="stat-card blue">
       <h3>🌳 Узлов структуры</h3>
@@ -88,7 +91,7 @@
       </a>
       <a class="quick-card" href="{% url 'admin:billing_bonus_changelist' %}">
         <span>🎁 Бонусы</span>
-        <strong>{% total_bonuses %|floatformat:0 %}</strong>
+        <strong>{{ total_bonuses_value|floatformat:0 }}</strong>
       </a>
       <a class="quick-card" href="{% url 'admin:mlm_structurenode_changelist' %}">
         <span>🌳 Структура</span>
@@ -160,5 +163,4 @@
     </div>
   </div>
 {% endblock %}
-
 
