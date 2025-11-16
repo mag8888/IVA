@@ -21,6 +21,56 @@ body {
     padding: 0;
 }
 
+/* --- Admin dark-mode override: зафиксировать светлую палитру даже при тёмной теме браузера/переключателя --- */
+:root,
+html[data-theme="light"],
+html[data-theme="dark"],
+.theme-dark {
+    /* Базовые цвета admin через CSS‑переменные */
+    --body-bg: #f8fafc;
+    --body-fg: #1e293b;
+    --header-bg: #ffffff;
+    --header-fg: #1e293b;
+    --link-fg: #1d4ed8;
+    --link-hover-color: #1e3a8e;
+    --hairline-color: #e5e7f0;
+    --border-color: #e5e7f0;
+    --accent-color: #4f46e5;
+    --selected-bg: #eef2ff;
+    --selected-fg: #1e293b;
+}
+body,
+#container,
+#content {
+    background-color: var(--body-bg) !important;
+    color: var(--body-fg) !important;
+}
+#header {
+    background-color: var(--header-bg) !important;
+    color: var(--header-fg) !important;
+}
+a,
+.breadcrumbs a {
+    color: var(--link-fg) !important;
+}
+a:hover {
+    color: var(--link-hover-color) !important;
+}
+table,
+th,
+td {
+    color: var(--body-fg) !important;
+}
+hr,
+.module,
+.module caption,
+.module table,
+.change-list .actions,
+.object-tools a,
+.paginator {
+    border-color: var(--border-color) !important;
+}
+
 /* ===== HEADER ===== */
 #header {
     background: #ffffff;
