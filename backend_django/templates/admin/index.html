@@ -1,0 +1,164 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+{% load admin_urls %}
+{% load admin_stats %}
+
+{% block extrastyle %}
+  {{ block.super }}
+  <link rel="stylesheet" type="text/css" href="{% static 'admin/css/dashboard.css' %}?v=20251116">
+{% endblock %}
+
+{% block content %}
+  <div class="dashboard-header">
+    <h1>📊 Панель управления</h1>
+    <div class="actions">
+      <a class="addlink" href="{% url 'admin:core_user_add' %}">+ Новый пользователь</a>
+      <a class="button" href="{% url 'admin:billing_payment_add' %}">Создать платёж</a>
+      <a class="button" href="{% url 'admin:billing_bonus_add' %}">Начислить бонус</a>
+    </div>
+  </div>
+
+  <div class="dashboard-stats">
+    <div class="stat-card blue">
+      <h3>👥 Всего пользователей</h3>
+      <p class="value">{% total_users %}</p>
+    </div>
+    <div class="stat-card green">
+      <h3>✅ Активных</h3>
+      <p class="value">{% active_users %}</p>
+    </div>
+    <div class="stat-card purple">
+      <h3>💳 С оплатой</h3>
+      <p class="value">{% users_with_payments %}</p>
+    </div>
+    <div class="stat-card orange">
+      <h3>💰 Выручка</h3>
+      <p class="value">${% total_revenue %|floatformat:0 %}</p>
+    </div>
+  </div>
+
+  <div class="dashboard-stats">
+    <div class="stat-card blue">
+      <h3>🧾 Платежей</h3>
+      <p class="value">{% total_payments %}</p>
+    </div>
+    <div class="stat-card green">
+      <h3>Оплачено</h3>
+      <p class="value">{% completed_payments %}</p>
+    </div>
+    <div class="stat-card orange">
+      <h3>Ожидает</h3>
+      <p class="value">{% pending_payments %}</p>
+    </div>
+    <div className="stat-card purple">
+      <h3>🎁 Бонусов всего</h3>
+      <p class="value">${% total_bonuses %|floatformat:0 %}</p>
+    </div>
+  </div>
+
+  <div class="dashboard-stats">
+    <div class="stat-card green">
+      <h3>💚 Зеленые бонусы</h3>
+      <p class="value">${% green_bonuses %|floatformat:0 %}</p>
+    </div>
+    <div class="stat-card orange">
+      <h3>💛 Желтые бонусы</h3>
+      <p class="value">${% yellow_bonuses %|floatformat:0 %}</p>
+    </div>
+    <div class="stat-card blue">
+      <h3>🌳 Узлов структуры</h3>
+      <p class="value">{% total_nodes %}</p>
+    </div>
+    <div class="stat-card purple">
+      <h3>📈 Новые за 30 дней</h3>
+      <p class="value">{% recent_users 30 %}</p>
+    </div>
+  </div>
+
+  <div class="dashboard-section">
+    <h2>⚡ Быстрые действия</h2>
+    <div class="quick-grid">
+      <a class="quick-card" href="{% url 'admin:core_user_changelist' %}">
+        <span>👤 Пользователи</span>
+        <strong>{% total_users %}</strong>
+      </a>
+      <a class="quick-card" href="{% url 'admin:billing_payment_changelist' %}">
+        <span>💳 Платежи</span>
+        <strong>{% total_payments %}</strong>
+      </a>
+      <a class="quick-card" href="{% url 'admin:billing_bonus_changelist' %}">
+        <span>🎁 Бонусы</span>
+        <strong>{% total_bonuses %|floatformat:0 %}</strong>
+      </a>
+      <a class="quick-card" href="{% url 'admin:mlm_structurenode_changelist' %}">
+        <span>🌳 Структура</span>
+        <strong>{% total_nodes %}</strong>
+      </a>
+    </div>
+  </div>
+
+  <div class="dashboard-columns">
+    <div class="dashboard-col">
+      <div class="dashboard-section">
+        <h2>🏆 Топ по балансу</h2>
+        <div class="table-responsive">
+          <table>
+            <thead>
+              <tr>
+                <th>Пользователь</th>
+                <th>Email</th>
+                <th>Баланс</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% top_users_by_balance 5 as tbal %}
+              {% if tbal %}
+                {% for u in tbal %}
+                  <tr>
+                    <td><a href="{% url 'admin:core_user_change' u.id %}">{{ u.username }}</a></td>
+                    <td>{{ u.email }}</td>
+                    <td class="money">${{ u.balance|floatformat:2 }}</td>
+                  </tr>
+                {% endfor %}
+              {% else %}
+                <tr><td colspan="3" class="empty-state">Нет данных</td></tr>
+              {% endif %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    <div class="dashboard-col">
+      <div class="dashboard-section">
+        <h2>💎 Топ по бонусам</h2>
+        <div class="table-responsive">
+          <table>
+            <thead>
+              <tr>
+                <th>Пользователь</th>
+                <th>Email</th>
+                <th>Бонусы</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% top_users_by_bonuses 5 as tbon %}
+              {% if tbon %}
+                {% for u in tbon %}
+                  <tr>
+                    <td><a href="{% url 'admin:core_user_change' u.id %}">{{ u.username }}</a></td>
+                    <td>{{ u.email }}</td>
+                    <td class="money">${{ u.total_bonuses|floatformat:2 }}</td>
+                  </tr>
+                {% endfor %}
+              {% else %}
+                <tr><td colspan="3" class="empty-state">Нет данных</td></tr>
+              {% endif %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock %}
+
+
